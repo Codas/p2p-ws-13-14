@@ -29,7 +29,7 @@ printData client@(handle, addr, port) = do
   let clientStr = (showClient client) ++ ": "
   input <- hGetContents handle
   -- logLn $ unlines $ map (clientStr++) (lines input)
-  logLn input
+  putStrLn input
   hClose handle
   logLn $ "Client disconnected: " ++ showClient client
 
@@ -53,10 +53,10 @@ logLn msg = do
 -- C-like API. Needed in case the regular API turns out to be too high level.
 serverSocketLow :: String -> IO Socket
 serverSocketLow port = do
-  let hints = S.defaultHints { S.addrFlags = [S.AI_PASSIVE] }
-  addrs <- S.getAddrInfo (Just hints) Nothing (Just port)
-  let addr = head addrs
-  sock <- S.socket (S.addrFamily addr) (S.addrSocketType addr) (S.addrProtocol addr)
-  S.bind sock (S.addrAddress addr)
-  S.listen sock 128
+  let intPort = read port :: Int
+
+  sock <- S.socket S.AF_INET S.Stream S.defaultProtocol
+  S.setSocketOption sock S.ReuseAddr 1
+  S.bind sock (S.SockAddrInet ( fromIntegral intPort ) S.iNADDR_ANY)
+  S.listen sock 5
   return sock

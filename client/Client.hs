@@ -2,8 +2,8 @@ import           Network
 import qualified Network.Socket     as S
 import           System.Environment (getArgs)
 import           System.IO          (BufferMode (LineBuffering), Handle,
-                                     IOMode (..), hClose, hGetContents, hPutStr,
-                                     hPutStrLn, hSetBuffering, stdin)
+                                     IOMode (..), hClose, hPutStr,
+                                     hSetBuffering)
 
 main :: IO ()
 main = withSocketsDo $ do
@@ -35,11 +35,13 @@ getServerHandle host port = do
   let portNumber = PortNumber $ fromIntegral (read port :: Int)
   connectTo host portNumber
 
+
 -- C-like API. Needed in case the regular API turns out to be too high level.
-clientSocketLow :: HostName -> String -> IO Handle
-clientSocketLow host port = do
+getServerHandleLow :: HostName -> String -> IO Handle
+getServerHandleLow host port = do
   addrs <- S.getAddrInfo Nothing (Just host) (Just port)
   let addr = head addrs
-  sock <- S.socket (S.addrFamily addr) (S.addrSocketType addr) (S.addrProtocol addr)
+  sock <- S.socket S.AF_INET S.Stream S.defaultProtocol
+  S.setSocketOption sock S.ReuseAddr 1
   S.connect sock (S.addrAddress addr)
   S.socketToHandle sock WriteMode
