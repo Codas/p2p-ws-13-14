@@ -1,16 +1,16 @@
 import           Network
-import qualified Network.Simple.TCP as TCP
-import qualified Network.Socket     as S
+import qualified Network.Socket        as S
 
 import           Pipes
-import qualified Pipes.ByteString   as PB
-import qualified Pipes.Network.TCP  as P (fromSocket)
-import qualified Pipes.Prelude      as P
+import qualified Pipes.ByteString      as PB
+import qualified Pipes.Prelude         as P
 
-import           System.Environment (getArgs)
-import           System.IO          (BufferMode (LineBuffering), Handle,
-                                     IOMode (..), hClose, hPutStr,
-                                     hSetBuffering)
+import qualified Data.ByteString.Char8 as B8
+import qualified Data.ByteString.UTF8  as UTF
+
+import           System.Environment    (getArgs)
+import           System.IO             (BufferMode (LineBuffering), Handle,
+                                        hClose, hSetBuffering)
 
 main :: IO ()
 main = withSocketsDo $ do
@@ -28,13 +28,13 @@ main = withSocketsDo $ do
 sendMsg :: Handle -> String -> IO ()
 sendMsg handle msg = do
   putStrLn msg
-  hPutStr handle msg
+  B8.hPutStrLn handle ( UTF.fromString msg )
   hClose handle
 
 sendInteractive :: Handle -> IO ()
 sendInteractive handle = do
-  input <- getContents
-  hPutStr handle input
+  let sPipe = PB.toHandle handle
+  runEffect $ PB.stdin >-> sPipe
   hClose handle
 
 -- Higher LVL API
@@ -45,11 +45,11 @@ getServerHandle host port = do
 
 
 -- C-like API. Needed in case the regular API turns out to be too high level.
-getServerHandleLow :: HostName -> String -> IO Handle
-getServerHandleLow host port = do
-  addrs <- S.getAddrInfo Nothing (Just host) (Just port)
-  let addr = head addrs
-  sock <- S.socket S.AF_INET S.Stream S.defaultProtocol
-  S.setSocketOption sock S.ReuseAddr 1
-  S.connect sock (S.addrAddress addr)
-  S.socketToHandle sock WriteMode
+-- getServerHandleLow :: HostName -> String -> IO Handle
+-- getServerHandleLow host port = do
+--   addrs <- S.getAddrInfo Nothing (Just host) (Just port)
+--   let addr = head addrs
+--   sock <- S.socket S.AF_INET S.Stream S.defaultProtocol
+--   S.setSocketOption sock S.ReuseAddr 1
+--   S.connect sock (S.addrAddress addr)
+--   S.socketToHandle sock WriteMode
