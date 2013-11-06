@@ -22,7 +22,7 @@ synopsis:            Simple TCP Server
 -- license:             
 
 -- The file containing the license text.
-license-file:        LICENSE
+-- license-file:        LICENSE
 
 -- The package author(s).
 author:              Arne Link
@@ -44,11 +44,12 @@ cabal-version:       >=1.8
 
 executable server
   -- .hs or .lhs file containing the Main module.
-  -- main-is:             Server.hs
+  main-is:             Server.hs
   
   -- Modules included in this executable, other than Main.
   -- other-modules:       
   
   -- Other library packages from which modules are imported.
-  build-depends:       base ==4.6.*, network ==2.4.*
+  build-depends:       base ==4.6.*, network ==2.4.*, threepenny-gui ==0.4.*,
+                       reactive-banana ==0.7.*
   

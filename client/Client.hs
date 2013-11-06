@@ -1,5 +1,12 @@
 import           Network
+import qualified Network.Simple.TCP as TCP
 import qualified Network.Socket     as S
+
+import           Pipes
+import qualified Pipes.ByteString   as PB
+import qualified Pipes.Network.TCP  as P (fromSocket)
+import qualified Pipes.Prelude      as P
+
 import           System.Environment (getArgs)
 import           System.IO          (BufferMode (LineBuffering), Handle,
                                      IOMode (..), hClose, hPutStr,
@@ -20,6 +27,7 @@ main = withSocketsDo $ do
 
 sendMsg :: Handle -> String -> IO ()
 sendMsg handle msg = do
+  putStrLn msg
   hPutStr handle msg
   hClose handle
 
