@@ -51,5 +51,6 @@ executable server
   
   -- Other library packages from which modules are imported.
   build-depends:       base ==4.6.*, network ==2.4.*, threepenny-gui ==0.4.*,
-                       reactive-banana ==0.7.*
+                       pipes ==4.0.*, pipes-bytestring ==1.1.*,
+                       network-simple ==0.3.*
   

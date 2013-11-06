@@ -1,5 +1,3 @@
-module Server where
-
 import           Data.List
 
 import           Control.Applicative
@@ -10,7 +8,6 @@ import           Control.Monad
 import qualified Network.Simple.TCP          as TCP
 import qualified Network.Socket              as S
 
--- import           FRP.Sodium
 import qualified Graphics.UI.Threepenny      as UI
 import           Graphics.UI.Threepenny.Core
 import           Reactive.Threepenny

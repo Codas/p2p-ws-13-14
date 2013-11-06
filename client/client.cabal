@@ -50,5 +50,6 @@ executable client
   -- other-modules:       
   
   -- Other library packages from which modules are imported.
-  build-depends:       base ==4.6.*, network ==2.4.*
+  build-depends:       base ==4.6.*, network ==2.4.*, pipes ==4.0.*,
+                       pipes-bytestring ==1.1.*
   
