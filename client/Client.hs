@@ -9,33 +9,44 @@ import qualified Data.ByteString.Char8 as B8
 import qualified Data.ByteString.UTF8  as UTF
 
 import           System.Environment    (getArgs)
-import           System.IO             (BufferMode (LineBuffering), Handle,
-                                        hClose, hSetBuffering)
+import           System.IO
 
+{-
+This Application is supposed to be called with two arguments:
+  host  = The host to connect to, for example "127.0.0.1".
+  port  = the port to bind to, for example "1337".
+  [msg] = The msg to sent. If left blank, open interactive session and
+          read from stdin.
+
+This applicatioin does not have output.
+-}
 main :: IO ()
 main = withSocketsDo $ do
   args <- getArgs
   let (host:port:optArgs) = args
 
   serverHandle <- getServerHandle host port
+  -- make sure to send after every line. BlockBuffering would propably
+  -- be better for binary data.
   hSetBuffering serverHandle LineBuffering
   return serverHandle
 
+  -- if remaining args are found, interpret this as the msg
+  -- and sent it to the server, otherwies read from stdin.
   case optArgs of
     (msg:_) -> sendMsg serverHandle msg
     _       -> sendInteractive serverHandle
+  hClose serverHandle
 
 sendMsg :: Handle -> String -> IO ()
 sendMsg handle msg = do
   putStrLn msg
   B8.hPutStrLn handle ( UTF.fromString msg )
-  hClose handle
 
 sendInteractive :: Handle -> IO ()
 sendInteractive handle = do
   let sPipe = PB.toHandle handle
   runEffect $ PB.stdin >-> sPipe
-  hClose handle
 
 -- Higher LVL API
 getServerHandle :: HostName -> String -> IO Handle
