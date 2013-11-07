@@ -1,3 +1,4 @@
+import qualified Data.ByteString             as BS
 import           Data.List
 
 import           Control.Applicative
@@ -33,6 +34,7 @@ main :: IO ()
 main = TCP.withSocketsDo $ do
   args@(port:_) <- getArgs
 
+
   (netEvent, pushEvent) <- mkServerEvent
   initUIs netEvent args
 
@@ -65,7 +67,8 @@ handleClient handle clientAddr pushEvent = do
   -- pipe the input of c(lient)Pipe to stdout. Enables us to optionally
   -- inntercept the input and accumulate msg size for example. All without
   -- possibly allocating the whole message in memory
-  runEffect $ cPipe >-> PB.stdout
+  let logPrinter = P.tee PB.stdout >-> (msgSizeEvent pushEvent clientAddr)
+  runEffect $ cPipe >-> logPrinter
   pushEvent $ NetEvent Disconnected clientAddr Nothing
 
 -------------------------------------------
@@ -88,6 +91,10 @@ accClients (NetEvent eType client _) cs =
     _            -> cs
   where clientS = show client
 
+msgSizeEvent fireNetEvent client = do
+    content <- await
+    liftIO $ fireNetEvent $ NetEvent Message client $ Just ( BS.length content )
+    return ()
 
 ---------------------------
 -- Event generation code --
@@ -127,7 +134,7 @@ mkPushEvt pushCon pushDis pushMsg evt@(NetEvent t _ _) =
     Connected    -> pushCon evt
     Message      -> pushMsg evt
 
-type Message = String   -- just an alias to make sure what we are talking about.
+type MessageSize = Int   -- just an alias to make sure what we are talking about.
 
 -- Alias to make the type signatures more expressive and shorter.
 type NetEventGetter = NetEventType -> Event NetEvent
@@ -137,7 +144,7 @@ type Client = TCP.SockAddr
 data NetEventType = Connected | Disconnected | Message
                   deriving ( Show, Eq )
 
-data NetEvent = NetEvent NetEventType Client (Maybe Message)
+data NetEvent = NetEvent NetEventType Client (Maybe MessageSize)
               deriving ( Show, Eq )
 
 
@@ -149,7 +156,9 @@ initConsoleUI :: NetEventGetter -> IO ()
 initConsoleUI netEvent = do
   conB <- stepper undefined (netEvent Connected)
   disB <- stepper undefined (netEvent Disconnected)
+  msgB <- stepper undefined (netEvent Message)
   onChange conB logEvt
+  onChange msgB logEvt
   onChange disB logEvt
 
 -- is the -v flag set?
@@ -166,8 +175,8 @@ logLn msg = do
 logEvt :: NetEvent -> IO ()
 logEvt (NetEvent Connected    client _)     = logLn $ "Client connected: " ++ show client
 logEvt (NetEvent Disconnected client _)     = logLn $ "Client disconnected: " ++ show client
-logEvt (NetEvent Message client (Just msg)) = logLn $ show client ++ ": " ++ show msg
-logEvt NetEvent {}                          = return ()
+logEvt (NetEvent Message client (Just size)) = logLn $ "Client " ++ show client ++ " msgSize: " ++ show size
+logEvt NetEvent {}                          = logLn $ "nothing"
 
 ------------------------------
 -- Connection / Socket code --
