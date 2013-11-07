@@ -74,25 +74,12 @@ handleClient handle clientAddr pushEvent = do
 
 initUIs :: NetEventGetter -> [String] -> IO ()
 initUIs netEvent args = do
-  -- Event setups. Not sure where exactlys this belongs at the moment.
-  -- TODO: On simuletanous events, only the firs event is kept. Not good...
-  let conDisEvts = unionWith const (netEvent Connected) (netEvent Disconnected)
-  -- clientsB keeps track of currently connected clients
-  -- The way this works is: conDisEvents :: Event(NetEvent)
-  -- accClient gest mapped (<$> operator) unto every incoming event, resulting
-  -- in an event :: Event ([String] -> [String]).
-  -- Then accumB :: a -> Event (a -> a) -> IO (Behavior a) comes into play.
-  -- It takes an initial value (empyt list) as first argument, and applys, once
-  -- for each incoming Event, the 2.nd function on this list.
-  -- If for example the firs event in conDisEvts is of Type Connected,
-  -- the value stored in accumB at this moment would be the value it was before
-  -- (cs) concatenated with the a list of the string representation of the
-  -- client (clientS)
-  clientsB <- accumB [] ( accClients <$> conDisEvts )
-  when ( argsVerbose args ) >> forkIO $ initGUI clientsB  -- init web GUI
-  onChange clientsB print                                 -- init Console UI
+  when ( argsVerbose args ) >> forkIO $ initGUI netEvent  -- init web GUI
+  initConsoleUI netEvent
 
 -- acuumulates NetEvents to a list of the clients converted to strings
+-- TODO: Do not accumulate in strings but rather the clients directly, in
+-- order to
 accClients :: NetEvent -> [String] -> [String]
 accClients (NetEvent eType client _) cs =
   case eType of
@@ -154,26 +141,33 @@ data NetEvent = NetEvent NetEventType Client (Maybe Message)
               deriving ( Show, Eq )
 
 
--- Create log entry on Event based on the event type.
-logEvt :: NetEvent -> IO ()
-logEvt (NetEvent Connected    client _)     = logLn $ "Client connected: " ++ show client
-logEvt (NetEvent Disconnected client _)     = logLn $ "Client disconnected: " ++ show client
-logEvt (NetEvent Message client (Just msg)) = logLn $ show client ++ ": " ++ show msg
-logEvt NetEvent {}                          = return ()
+-----------------------------
+-- Printing and Console UI --
+-----------------------------
 
---------------
--- Printing --
---------------
+initConsoleUI :: NetEventGetter -> IO ()
+initConsoleUI netEvent = do
+  conB <- stepper undefined (netEvent Connected)
+  disB <- stepper undefined (netEvent Disconnected)
+  onChange conB logEvt
+  onChange disB logEvt
 
 -- is the -v flag set?
 argsVerbose :: [String] -> Bool
-argsVerbose args = ("-v" `elem` args)
+argsVerbose args = "-v" `elem` args
 
 -- conditionally log the msg to stdout, only if the -v flag is set
 logLn :: String -> IO ()
 logLn msg = do
   args <- getArgs
   when (argsVerbose args) (putStrLn msg)
+
+-- Create log entry on Event based on the event type.
+logEvt :: NetEvent -> IO ()
+logEvt (NetEvent Connected    client _)     = logLn $ "Client connected: " ++ show client
+logEvt (NetEvent Disconnected client _)     = logLn $ "Client disconnected: " ++ show client
+logEvt (NetEvent Message client (Just msg)) = logLn $ show client ++ ": " ++ show msg
+logEvt NetEvent {}                          = return ()
 
 ------------------------------
 -- Connection / Socket code --
@@ -191,30 +185,46 @@ acceptFork sock fn = do
   forkIO $ E.finally (fn (handle, addr)) (hClose handle)
 
 -- C-like API. Needed in case the regular API turns out to be too high level.
-serverSocketLow :: String -> IO ( S.Socket, S.SockAddr )
-serverSocketLow port = do
-  let intPort  = read port :: Int
-      sockAddr = S.SockAddrInet ( fromIntegral intPort ) S.iNADDR_ANY
-  sock <- S.socket S.AF_INET S.Stream S.defaultProtocol
-  S.setSocketOption sock S.ReuseAddr 1
-  S.bind sock sockAddr
-  S.listen sock 5
-  return (sock, sockAddr)
+-- TODO: Make sure this ist still working
+-- serverSocketLow :: String -> IO ( S.Socket, S.SockAddr )
+-- serverSocketLow port = do
+--   let intPort  = read port :: Int
+--       sockAddr = S.SockAddrInet ( fromIntegral intPort ) S.iNADDR_ANY
+--   sock <- S.socket S.AF_INET S.Stream S.defaultProtocol
+--   S.setSocketOption sock S.ReuseAddr 1
+--   S.bind sock sockAddr
+--   S.listen sock 5
+--   return (sock, sockAddr)
 
 ----------------------------
 -- Experimental GUI stuff --
 ----------------------------
 
-initGUI :: Behavior [String] -> IO ()
-initGUI clientsB = do
+initGUI :: NetEventGetter -> IO ()
+initGUI netEvent = do
   let static = "wwwdata"
   UI.startGUI UI.defaultConfig
     { UI.tpPort       = 10000
     , UI.tpStatic     = Just static
-    } ( setupGUI clientsB )
+    } ( setupGUI netEvent )
 
-setupGUI :: Behavior [String] -> Window -> UI ()
-setupGUI clientsB window = void $ do
+setupGUI :: NetEventGetter -> Window -> UI ()
+setupGUI netEvent window = void $ do
+    -- Event setups. Not sure where exactlys this belongs at the moment.
+    -- TODO: On simuletanous events, only the firs event is kept. Not good...
+    let conDisEvts = unionWith const (netEvent Connected) (netEvent Disconnected)
+    -- clientsB keeps track of currently connected clients
+    -- The way this works is: conDisEvents :: Event(NetEvent)
+    -- accClient gest mapped (<$> operator) unto every incoming event, resulting
+    -- in an event :: Event ([String] -> [String]).
+    -- Then accumB :: a -> Event (a -> a) -> IO (Behavior a) comes into play.
+    -- It takes an initial value (empyt list) as first argument, and applys, once
+    -- for each incoming Event, the 2.nd function on this list.
+    -- If for example the firs event in conDisEvts is of Type Connected,
+    -- the value stored in accumB at this moment would be the value it was before
+    -- (cs) concatenated with the a list of the string representation of the
+    -- client (clientS)
+    clientsB <- accumB [] ( accClients <$> conDisEvts )
     return window # set title "Server Monitor"
     cv <- mkElement "pre" #. "clientsView"
     getBody window #+ [element cv]
