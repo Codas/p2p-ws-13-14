@@ -63,13 +63,13 @@ main = TCP.withSocketsDo $ do
 handleClient :: Handle -> Client -> (NetEvent -> IO b) -> IO b
 handleClient handle clientAddr pushEvent = do
   let cPipe = PB.fromHandle handle
-  pushEvent $ NetEvent Connected clientAddr Nothing
+  pushEvent $ NetEvent Connected clientAddr 0
   -- pipe the input of c(lient)Pipe to stdout. Enables us to optionally
   -- inntercept the input and accumulate msg size for example. All without
   -- possibly allocating the whole message in memory
-  let logPrinter = P.tee PB.stdout >-> (msgSizeEvent pushEvent clientAddr)
+  let logPrinter = P.tee (msgSizeEvent pushEvent clientAddr) >-> PB.stdout
   runEffect $ cPipe >-> logPrinter
-  pushEvent $ NetEvent Disconnected clientAddr Nothing
+  pushEvent $ NetEvent Disconnected clientAddr 0
 
 -------------------------------------------
 -- General UI (console, event, GUI) code --
@@ -80,21 +80,10 @@ initUIs netEvent args = do
   when ( argsVerbose args ) >> forkIO $ initGUI netEvent  -- init web GUI
   initConsoleUI netEvent
 
--- acuumulates NetEvents to a list of the clients converted to strings
--- TODO: Do not accumulate in strings but rather the clients directly, in
--- order to
-accClients :: NetEvent -> [String] -> [String]
-accClients (NetEvent eType client _) cs =
-  case eType of
-    Disconnected -> Data.List.delete clientS cs
-    Connected    -> cs ++ [clientS]
-    _            -> cs
-  where clientS = show client
-
 msgSizeEvent fireNetEvent client = do
     content <- await
-    liftIO $ fireNetEvent $ NetEvent Message client $ Just ( BS.length content )
-    return ()
+    liftIO $ fireNetEvent $ NetEvent Message client $ BS.length content
+    msgSizeEvent fireNetEvent client
 
 ---------------------------
 -- Event generation code --
@@ -144,7 +133,7 @@ type Client = TCP.SockAddr
 data NetEventType = Connected | Disconnected | Message
                   deriving ( Show, Eq )
 
-data NetEvent = NetEvent NetEventType Client (Maybe MessageSize)
+data NetEvent = NetEvent NetEventType Client MessageSize
               deriving ( Show, Eq )
 
 
@@ -173,10 +162,10 @@ logLn msg = do
 
 -- Create log entry on Event based on the event type.
 logEvt :: NetEvent -> IO ()
-logEvt (NetEvent Connected    client _)     = logLn $ "Client connected: " ++ show client
-logEvt (NetEvent Disconnected client _)     = logLn $ "Client disconnected: " ++ show client
-logEvt (NetEvent Message client (Just size)) = logLn $ "Client " ++ show client ++ " msgSize: " ++ show size
-logEvt NetEvent {}                          = logLn $ "nothing"
+logEvt (NetEvent Connected    client _) = logLn $ "Client connected: " ++ show client
+logEvt (NetEvent Disconnected client _) = logLn $ "Client disconnected: " ++ show client
+logEvt (NetEvent Message client size)   = logLn $ "Client " ++ show client ++ " msgSize: " ++ show size
+logEvt NetEvent {}                      = logLn $ "nothing"
 
 ------------------------------
 -- Connection / Socket code --
@@ -209,12 +198,21 @@ acceptFork sock fn = do
 -- Experimental GUI stuff --
 ----------------------------
 
+data ClientStats = ClientStats Client MessageSize
+
+instance Eq ClientStats where
+    (==) (ClientStats c1 _) (ClientStats c2 _) = c1 == c2
+
+instance Show ClientStats where
+  show (ClientStats client msgSize) = show client
+
 initGUI :: NetEventGetter -> IO ()
 initGUI netEvent = do
-  let static = "wwwdata"
+  let static = "wwwroot/"
   UI.startGUI UI.defaultConfig
     { UI.tpPort       = 10000
     , UI.tpStatic     = Just static
+    , UI.tpCustomHTML = Just "index.html"
     } ( setupGUI netEvent )
 
 setupGUI :: NetEventGetter -> Window -> UI ()
@@ -234,9 +232,32 @@ setupGUI netEvent window = void $ do
     -- (cs) concatenated with the a list of the string representation of the
     -- client (clientS)
     clientsB <- accumB [] ( accClients <$> conDisEvts )
+    -- bytesB <- accumB 0 ( accMsgSize <$> netEvent Message )
+
     return window # set title "Server Monitor"
     cv <- mkElement "pre" #. "clientsView"
-    getBody window #+ [element cv]
+    netStat <- UI.string ""
+    netView <- UI.new #. "netMonitor" #+ [ (string "Bytes: "), (element netStat) ]
+    mainView <- UI.div #. "col col-md-12" #+ [element cv, element netView]
+    UI.getBody window #+ [ ( UI.div #. "container" ) #+ [ element mainView ]]
+
     -- Update the clientView on changes to the current list of clients
     element cv # sink text ( concatClients <$> clientsB )
-  where concatClients = concat . \s -> intersperse ", " s
+    -- element netStat # sink text ( show <$> bytesB )
+  where concatClients = concat . \s -> intersperse "\n" s
+
+-- acuumulates NetEvents to a list of the clients converted to strings
+-- TODO: Do not accumulate in strings but rather the clients directly, in
+-- order to
+accClients :: NetEvent -> [String] -> [String]
+accClients (NetEvent eType client msgSize) cs =
+  case eType of
+    Disconnected -> Data.List.delete clientS cs
+    Connected    -> cs ++ [clientS]
+    _            -> cs
+  where clientS = show client
+
+accMsgSize :: NetEvent -> MessageSize -> MessageSize
+accMsgSize (NetEvent eType client msgSize) size =
+  case eType of
+    Message -> size + msgSize
