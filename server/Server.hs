@@ -48,16 +48,6 @@ main = TCP.withSocketsDo $ do
     forever . acceptFork listenSocket $ \(connSocket, remoteAddr) ->
       handleClient connSocket remoteAddr pushEvent
 
-  -- or for the low lvl api
-  -- TODO: Verify this is still working
-  -- (sock, addr) <- serverSocketLow port
-  -- logLn $ "Waiting for clients ..."
-  -- logLn $ "Currently listening on " ++ show addr
-  -- forever . TCP.acceptFork sock $ \(connSocket, remoteAddr) -> do
-  --   handleClient connSocket remoteAddr pushEvent
-  --   S.close connSocket
-  -- S.close sock
-
 -- Reads client data, displays it and notifies the system of (dis)connected
 -- clients
 handleClient :: Handle -> Client -> (NetEvent -> IO b) -> IO b
@@ -232,7 +222,7 @@ setupGUI netEvent window = void $ do
     -- (cs) concatenated with the a list of the string representation of the
     -- client (clientS)
     clientsB <- accumB [] ( accClients <$> conDisEvts )
-    -- bytesB <- accumB 0 ( accMsgSize <$> netEvent Message )
+    bytesB <- accumB 0 ( accMsgSize <$> netEvent Message )
 
     return window # set title "Server Monitor"
     cv <- mkElement "pre" #. "clientsView"
@@ -243,7 +233,7 @@ setupGUI netEvent window = void $ do
 
     -- Update the clientView on changes to the current list of clients
     element cv # sink text ( concatClients <$> clientsB )
-    -- element netStat # sink text ( show <$> bytesB )
+    element netStat # sink text ( show <$> bytesB )
   where concatClients = concat . \s -> intersperse "\n" s
 
 -- acuumulates NetEvents to a list of the clients converted to strings
