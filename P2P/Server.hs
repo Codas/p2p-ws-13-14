@@ -1,3 +1,5 @@
+module P2P.Server where
+
 import qualified Data.ByteString             as BS
 import           Data.List
 
@@ -5,9 +7,6 @@ import           Control.Applicative
 import           Control.Concurrent          (ThreadId, forkIO)
 import qualified Control.Exception           as E
 import           Control.Monad
-
-import qualified Network.Simple.TCP          as TCP
-import qualified Network.Socket              as S
 
 import qualified Graphics.UI.Threepenny      as UI
 import           Graphics.UI.Threepenny.Core
@@ -20,6 +19,8 @@ import qualified Pipes.Prelude               as P
 import           System.Environment          (getArgs)
 import           System.IO
 
+import qualified P2P.Networking              as Net
+
 {-
 This Application is supposed to be called with one argument:
   port = the port to bind to, for example "1337".
@@ -31,7 +32,7 @@ Possible flags are:
 All output goes to stdout.
 -}
 main :: IO ()
-main = TCP.withSocketsDo $ do
+main = Net.withSocketsDo $ do
   args@(port:_) <- getArgs
 
 
@@ -70,6 +71,7 @@ initUIs netEvent args = do
   when ( argsVerbose args ) >> forkIO $ initGUI netEvent  -- init web GUI
   initConsoleUI netEvent
 
+msgSizeEvent :: MonadIO m => (NetEvent -> IO a) -> Client -> Proxy () PB.ByteString y' y m ()
 msgSizeEvent fireNetEvent client = do
     content <- await
     liftIO $ fireNetEvent $ NetEvent Message client $ BS.length content
@@ -155,7 +157,6 @@ logEvt :: NetEvent -> IO ()
 logEvt (NetEvent Connected    client _) = logLn $ "Client connected: " ++ show client
 logEvt (NetEvent Disconnected client _) = logLn $ "Client disconnected: " ++ show client
 logEvt (NetEvent Message client size)   = logLn $ "Client " ++ show client ++ " msgSize: " ++ show size
-logEvt NetEvent {}                      = logLn $ "nothing"
 
 ------------------------------
 -- Connection / Socket code --
