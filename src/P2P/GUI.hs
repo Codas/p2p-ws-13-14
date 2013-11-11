@@ -59,7 +59,8 @@ layout :: [UI Element] -> [UI Element]
 layout mainContent = [UI.div #. "container" #+ [
                          UI.div #. "col-md-12" #+ mainContent ]]
 
-getNetBehavior :: MonadIO m => Evt.NetEventGetter -> m (Behavior [ClientStats], Behavior Evt.MessageSize)
+getNetBehavior :: MonadIO m => Evt.NetEventGetter ->
+                  m (Behavior [ClientStats], Behavior Evt.MessageSize)
 getNetBehavior netEvent = do
     -- clientsB keeps track of currently connected clients (as ClientStats)
     clientsB <- accumB [] ( accClientStats <$> netEvent Evt.AnyEvent)

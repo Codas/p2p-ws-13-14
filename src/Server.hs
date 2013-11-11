@@ -26,6 +26,8 @@ data Opts = Opts
   , opGui     :: Bool }
   deriving Show
 
+-- define possible command line arguments. Call this programm with --help
+-- to get a description of every argument
 serverOpts :: Parser Opts
 serverOpts = Opts
      <$> strOption
@@ -93,7 +95,8 @@ handleClient handle clientAddr pushEvent = do
 
 -- Build message size consumer. Basic pipes consumer that fires an msg size event
 -- every time a chunk of data arrives.
-mkMsgSizeConsumer :: MonadIO m => (Evt.NetEvent -> IO a) -> Net.SockAddr -> Proxy () PB.ByteString y' y m ()
+mkMsgSizeConsumer :: MonadIO m => (Evt.NetEvent -> IO a) -> Net.SockAddr ->
+                     Proxy () PB.ByteString y' y m ()
 mkMsgSizeConsumer fireNetEvent client = do
     content <- await
     liftIO $ fireNetEvent $ Evt.NetEvent Evt.Message client $ BS.length content

@@ -29,21 +29,21 @@ serverOpts = Opts
         <> value 1337
         <> metavar "PORT"
         <> showDefault
-        <> help "Server port to connect to." )
+        <> help "Port on which to listen to incoming connections." )
      <*> strOption
          ( long "host"
         <> short 'h'
         <> value "127.0.0.1"
         <> metavar "HOST"
         <> showDefault
-        <> help "Server address to connect to.")
+        <> help "Address to accept incoming connections from.")
      <*> nullOption
          ( long "message"
         <> short 'm'
         <> reader msgReader
         <> metavar "MESSAGE"
         <> value Nothing
-        <> help "Send a message to HOST and immediately disconnect. Leave empty to send from stdin.")
+        <> help "Send a one-off message to HOST. Leave empty to send from stdin.")
 
 -- Maybe message reader so we can sanely check for this option
 msgReader :: Monad m => String -> m ( Maybe String )
@@ -66,11 +66,13 @@ main = Net.withSocketsDo $ do
           Nothing  -> sendInteractive serverHandle
           Just msg -> sendMsg serverHandle msg
 
+-- send message directly
 sendMsg :: Handle -> String -> IO ()
 sendMsg handle msg = do
     putStrLn msg
     B8.hPutStrLn handle ( UTF.fromString msg )
 
+-- send from stdin
 sendInteractive :: Handle -> IO ()
 sendInteractive handle = do
     let sPipe = PB.toHandle handle
