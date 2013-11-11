@@ -107,8 +107,8 @@ mkMsgSizeConsumer fireNetEvent client = do
 -------------------------------
 initUIs :: Evt.NetEventGetter -> Opts -> IO ()
 initUIs netEvent options = do
-    when ( opGui options ) $ GUI.init netEvent  -- init web GUI
-    when (opConsole options) $ initConsoleUI netEvent   -- init console gui
+    when ( opGui options ) $ GUI.init netEvent        -- init web GUI
+    when (opConsole options) $ initConsoleUI netEvent -- init console gui
 
 ----------------
 -- Console UI --
