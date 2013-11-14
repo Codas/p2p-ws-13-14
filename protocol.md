@@ -33,6 +33,9 @@ Compression algorithm is [LZ4](https://code.google.com/p/lz4/).
 - [Haskell implementation](http://hackage.haskell.org/package/lz4-0.2.2)
 - [Golang implementation](https://github.com/salviati/go-lz4)
 
+Messages (or any text really) should only be compressed on message sizes > 20 bytes.
+In fact, LZ4 has a hard minimum of 12 bytes if I recall correctly.
+
 ### Length Fields
 Variable from 1-8 bytes, somewhat like UTF-8 does it.
 
