@@ -52,9 +52,9 @@ compatibility). This gives us a maximum message size of multiple PB.
 
 **Alternative**:
 
-Always use first 3 or 4 bits as number overflow length, rest as number
-bits. That would probably simplify implementation and still leave us with 128GB
-(3 bit length) or multiple PB (4 bit length) of allowed message size.
+Always use first 2 or 3 bits as number overflow length, rest as number
+bits. That would probably simplify implementation and still leave us with 256GB
+(2 bit length) or multiple PB (3 bit length) of allowed message size.
 
 Downside would be to almost always use 2 bytes for the length field (message
 length of 16 to 32 byte possible with one length byte). Starting with the 2nd
