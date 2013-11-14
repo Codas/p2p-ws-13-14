@@ -46,7 +46,7 @@ serverOpts = Opts
         <> showDefaultWith (const "Any address")
         <> help "Address to accept incoming connections from. E.g. localhost.")
      <*> switch
-         ( long "console"
+         ( long "console
         <> short 'c'
         <> help "Enable console logging of connections, msg size etc." )
      <*> switch
