@@ -18,6 +18,7 @@ in order to get the server / Haskell version to run you need a dev. version of t
 Assuming you have git, haskell ghc and cabal up and running (via the
 [Haskell Platform](http://www.haskell.org/platform/) for example), only 6 steps
 are needed.
+
 1. (in temp dir:) `git clone https://github.com/HeinrichApfelmus/threepenny-gui.git`
 2. `cd threepenny-gui`
 3. `git checkout origin/develop`
@@ -29,10 +30,10 @@ Subsequently, only the last (on last two on updated dependencies) step is needed
 to start the server.
 
 **Good Haskell resources**:
+
 - [Sublime Haskell](https://github.com/SublimeHaskell/SublimeHaskell) for
   [Sublime Text Editor](http://www.sublimetext.com/) of course, Editor
 - [EclipseFP](http://eclipsefp.github.io/), IDE
--
 
 ## go version
 Get go here: http://golang.org/doc/install#windows
