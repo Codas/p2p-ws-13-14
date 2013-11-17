@@ -41,7 +41,6 @@ IP Addresses are Either IPv4 or IPv6, separated by a null byte.
 | `1100` | Receive Message    | Topic(s), Message | Receive Text Message for Topic(s)    |
 | `1100` | Receive Binary     | Topic(s), Message | Receive Binary Message for Topic(s)  |
 | `1101` | Receive Broadcast  | Message           | Send message to all available topics |
-<!-- | `0011` | Ask Topic Info     | Topic             | Topic Information, e.g. user count, list, etc. | -->
 
 **Admin**:
 
