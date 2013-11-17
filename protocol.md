@@ -8,9 +8,9 @@
 
 **Additional Fields**:
 
-| 1 Byte       | 1 - 8 Bytes     | 1+ Bytes    |
-| :----------: | :-------------: | :---------: |
-| IP Address   | Nickname Length | Nickname(s) |
+| 8 or 16 Bytes |
+| :----------:  |
+| IP Address    |
 
 ## Topic
 Only Characters above 32 are allowed (UTF is fine).
@@ -18,7 +18,7 @@ Multiple Topics can be separated by a null byte. (Any better ideas?)
 
 Topics must not be longer than 128 characters (independent of bytes).
 
-Nickname fields behave exactly like topic fields.
+IP Addresses are Either IPv4 or IPv6, separated by a null byte.
 
 ## Flags
 | 7     | 6 - 3  | 2   | 1        | 0        |
@@ -26,31 +26,31 @@ Nickname fields behave exactly like topic fields.
 | Admin | Action | Zip | Reserved | Reserved |
 
 
-### Commands
+### Commands Client → Server
 **Regular**:
 
-| Binary | Command      | Sections          | Comments                                       |
-| :---:  | :---         | :---              | :---                                           |
-| `0000` | Join         | Topic(s)          | Join / create a topic                          |
-| `0001` | Part         | Topic(s)          | Unsubscribe from topic                         |
-| `0010` | Topic List   | Nothing           | Requst topic list                              |
-| `0011` | Topic Info   | Topic             | Topic Information, e.g. user count, list, etc. |
-| `0100` | Send Message | Topic(s), Message | Send message to topic                          |
-| `0101` | Send Binary  | Topic(s), Message | Binary stream, big files                       |
-| `0110` | Broadcast    | Message           | Send message to all available topics           |
-| `1000` | Nickname     | Topic, Nickname   | Set Nickname for Topic                         |
-
-Topic Info and Topic List need further design specification (response protocol?)
+| Binary | Command            | Sections          | Comments                             |
+| :---:  | :---               | :---              | :---                                 |
+| `0000` | Join               | Topic(s)          | Join / create a topic                |
+| `0001` | Part               | Topic(s)          | Unsubscribe from topic               |
+| `0010` | Ask for Topic List | Nothing           | Requst topic list                    |
+| `0100` | Send Message       | Topic(s), Message | Send message to topic                |
+| `0101` | Send Binary        | Topic(s), Message | Binary stream, big files             |
+| `0110` | Send Broadcast     | Message           | Send message to all available topics |
+| `1010` | Receive Topic List | Topic(s)          | Receive List of Topics               |
+| `1100` | Receive Message    | Topic(s), Message | Receive Text Message for Topic(s)    |
+| `1100` | Receive Binary     | Topic(s), Message | Receive Binary Message for Topic(s)  |
+| `1101` | Receive Broadcast  | Message           | Send message to all available topics |
+<!-- | `0011` | Ask Topic Info     | Topic             | Topic Information, e.g. user count, list, etc. | -->
 
 **Admin**:
 
-| Binary | Command      | Sections       | Comments                                                          |
-| :---:  | :---         | :---           | :---                                                              |
-| `0000` | Close        | Nothing        | Shut down server                                                  |
-| `0001` | Delete topic | Topic          | Unregister everyone from this topic                               |
-| `0010` | Kick user    | User(s)        | Kick User(s), specified by IPs                                    |
-| `0011` | Kick user    | Topic, User(s) | Kick User(s), specified by Nicknames. Only in the specified topic |
-| `0100` | Statistics   | Nothing        | Get statistics for this server                                    |
+| Binary | Command      | Sections | Comments                            |
+| :---:  | :---         | :---     | :---                                |
+| `0000` | Close        | Nothing  | Shut down server                    |
+| `0001` | Delete topic | Topic    | Unregister everyone from this topic |
+| `0010` | Kick user    | User(s)  | Kick User(s), specified by IPs      |
+| `0100` | Statistics   | Nothing  | Get statistics for this server      |
 
 ### Compression (Zip)
 Compression algorithm is [LZ4](https://code.google.com/p/lz4/).
