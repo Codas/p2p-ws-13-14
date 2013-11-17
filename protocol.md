@@ -18,7 +18,8 @@ Multiple Topics can be separated by a null byte. (Any better ideas?)
 
 Topics must not be longer than 128 characters (independent of bytes).
 
-IP Addresses are Either IPv4 or IPv6, separated by a null byte.
+IP Addresses are Either IPv4 or IPv6. Length field before every IP address
+needed.
 
 ## Flags
 | 7     | 6 - 3  | 2   | 1        | 0        |
@@ -39,8 +40,8 @@ IP Addresses are Either IPv4 or IPv6, separated by a null byte.
 | `0110` | Send Broadcast     | Message           | Send message to all available topics |
 | `1010` | Receive Topic List | Topic(s)          | Receive List of Topics               |
 | `1100` | Receive Message    | Topic(s), Message | Receive Text Message for Topic(s)    |
-| `1100` | Receive Binary     | Topic(s), Message | Receive Binary Message for Topic(s)  |
-| `1101` | Receive Broadcast  | Message           | Send message to all available topics |
+| `1101` | Receive Binary     | Topic(s), Message | Receive Binary Message for Topic(s)  |
+| `1100` | Receive Broadcast  | Message           | Send message to all available topics |
 
 **Admin**:
 
