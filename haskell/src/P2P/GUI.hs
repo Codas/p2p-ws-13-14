@@ -48,7 +48,7 @@ setupGUI clientsB bytesB window = void $ do
           UI.h1 # set text "Server Monitor",
           element clientsView,
           element netView]
-    UI.getBody window #+ (layout mainContent)
+    UI.getBody window #+ layout mainContent
 
     -- Update the clientView on changes to the current list of clients
     element clientsView # sink text ( concatClients <$> clientsB )

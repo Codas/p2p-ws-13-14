@@ -3,12 +3,11 @@ module P2P.Networking
     , module Network.Simple.TCP
     ) where
 
-import           Control.Applicative
-import           Control.Concurrent  (ThreadId, forkIO)
-import qualified Control.Exception   as E
-import qualified Network             as N
-import           Network.Simple.TCP  hiding (acceptFork)
-import qualified Network.Socket      as S
+import           Control.Concurrent (ThreadId, forkIO)
+import qualified Control.Exception  as E
+import qualified Network            as N
+import           Network.Simple.TCP hiding (acceptFork)
+import qualified Network.Socket     as S
 import           System.IO
 
 ---------------------
@@ -34,41 +33,3 @@ connectTo host port fn = do
                                           -- sure to close the handle after we
                                           -- are done or in cass of errors.
   where portNumber = N.PortNumber $ fromIntegral port
-
-
---------------------
--- Low level APIs --
---------------------
-listenLow :: HostPreference -> String -> ((Socket, S.SockAddr) -> IO ()) -> IO ()
-listenLow address port fn = do
-    sockAddr <- getAddress address port  -- convert to a value the S. library needs.
-    sock <- S.socket S.AF_INET S.Stream S.defaultProtocol -- Create TCP socket.
-    S.setSocketOption sock S.ReuseAddr 1
-    S.bind sock sockAddr -- bind socket to a address. Now we can accept connections.
-    S.listen sock 5      -- allow backlog of 5.
-    E.finally (fn (sock, sockAddr)) (S.close sock) -- pass handle to function
-                                                   -- and make sure to really close
-                                                   -- the socket on error
-
--- Convert address and port as that the TCP library accepts to an address
--- format the socket library wants.
-getAddress :: HostPreference -> ServiceName -> IO SockAddr
-getAddress address port = do
-    -- Default to any address
-    let myHints  = S.defaultHints { S.addrFlags = [S.AI_PASSIVE] }
-        host = case address of
-          Host h -> Just h
-          _      -> Nothing
-    -- get the S.addrAddress of the best match and return it into IO
-    a <- head <$> S.getAddrInfo (Just myHints) host (Just port)
-    return $ S.addrAddress a
-
-connectToLow :: Show a => HostName -> a -> (Handle -> IO b) -> IO b
-connectToLow host port fn = do
-    addrs <- S.getAddrInfo Nothing (Just host) (Just (show port))
-    let addr = head addrs
-    sock <- S.socket S.AF_INET S.Stream S.defaultProtocol
-    S.setSocketOption sock S.ReuseAddr 1
-    S.connect sock (S.addrAddress addr)
-    handle <- S.socketToHandle sock WriteMode
-    E.finally (fn handle) (hClose handle) -- pass handle to function and make

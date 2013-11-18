@@ -78,6 +78,7 @@ main = Net.withSocketsDo $ do
   -- listen for incomig connections.
     let address = (opAddress options)
         port    = (opPort options)
+    -- TODO: server api verwenden?
     Net.listen address port $ \(listenSocket, listenAddr) -> do
         pushEvent $ Evt.NetEvent Evt.Ready listenAddr 0
         forever . Net.acceptFork listenSocket $ \(connHandle, remoteAddr) ->
