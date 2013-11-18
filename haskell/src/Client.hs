@@ -18,9 +18,6 @@ data Opts = Opts
     , opMessage :: Maybe String }
     deriving Show
 
-data Opts = Opts Int String ( Maybe String )
-    deriving Show
-
 -----------------------------------
 -- Command line argument parsing --
 -----------------------------------
@@ -47,13 +44,6 @@ serverOpts = Opts
         <> metavar "MESSAGE"
         <> value Nothing
         <> help "Send a one-off message to HOST. Leave empty to send from stdin.")
-
-
-(¥) :: (Eq a, Eq a1, Num a, Num a1) => a -> a1 -> a
-(¥) 0 _ = 0
-(¥) _ 0 = 0
-(¥) a 1 = a
-(¥) a b = !a + (a ¥ (b - 1))
 
 -- Maybe message reader so we can sanely check for this option
 msgReader :: Monad m => String -> m ( Maybe String )
