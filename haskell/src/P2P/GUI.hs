@@ -38,7 +38,7 @@ init netEvent = do
 
 setupGUI :: (Show a, Show a1) => Behavior [a] -> Behavior a1 -> Window -> UI ()
 setupGUI clientsB bytesB window = void $ do
-    return window # set title "Server Monitor"
+    (return window) # set title "Server Monitor"
     clientsView <- mkElement "pre" #. "clientsView"
     netStat     <- UI.string "0"
     netView <- UI.new #. "netMonitor" #+ [

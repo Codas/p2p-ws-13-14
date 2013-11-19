@@ -35,13 +35,10 @@ needed.
 | `0000` | Join               | Topic(s)          | Join / create a topic                |
 | `0001` | Part               | Topic(s)          | Unsubscribe from topic               |
 | `0010` | Ask for Topic List | Nothing           | Requst topic list                    |
-| `0100` | Send Message       | Topic(s), Message | Send message to topic                |
-| `0101` | Send Binary        | Topic(s), Message | Binary stream, big files             |
-| `0110` | Send Broadcast     | Message           | Send message to all available topics |
-| `1010` | Receive Topic List | Topic(s)          | Receive List of Topics               |
-| `1100` | Receive Message    | Topic(s), Message | Receive Text Message for Topic(s)    |
-| `1101` | Receive Binary     | Topic(s), Message | Receive Binary Message for Topic(s)  |
-| `1100` | Receive Broadcast  | Message           | Send message to all available topics |
+| `0011` | Receive Topic List | Topic(s)          | Receive List of Topics               |
+| `0100` | Message            | Topic(s), Message | Send message to topic                |
+| `0101` | Binary             | Topic(s), Message | Binary stream, big files             |
+| `0110` | Broadcast          | Message           | Send message to all available topics |
 
 **Admin**:
 
