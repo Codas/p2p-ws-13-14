@@ -32,11 +32,10 @@ Library
   -- Modules included in this library, other than Main.
   exposed-modules:     P2P.Networking, P2P.Events, P2P.GUI
   
-  build-depends:       base ==4.6.*, network ==2.4.*, threepenny-gui ==0.4.*,
+  build-depends:       base ==4.6.*, network ==2.4.1.2, threepenny-gui ==0.4.*,
                        pipes ==4.0.*, pipes-bytestring ==1.0.*,
                        network-simple ==0.3.*, utf8-string,
-                       bytestring, binary-strict
-                       
+                       optparse-applicative, bytestring ==0.10.0.2, binary-strict
  
 Executable server
     -- .hs or .lhs file containing the Main module.
@@ -46,7 +45,8 @@ Executable server
    
     -- Other library packages from which modules are imported.
     build-depends:       p2p, pipes ==4.0.*, pipes-bytestring ==1.0.*, utf8-string,
-                         optparse-applicative, bytestring
+                         optparse-applicative, bytestring ==0.10.0.2, base ==4.6.*, network ==2.4.1.2,
+                         network-simple ==0.3.*, threepenny-gui ==0.4.*, base ==4.6.*
     
 Executable client
     -- .hs or .lhs file containing the Main module.
@@ -56,4 +56,5 @@ Executable client
     
     -- Other library packages from which modules are imported.
     build-depends:       p2p, pipes ==4.0.*, pipes-bytestring ==1.0.*, utf8-string,
-                         optparse-applicative, bytestring
+                         optparse-applicative, bytestring ==0.10.0.2, network ==2.4.1.2,
+                         network-simple ==0.3.*, threepenny-gui ==0.4.*, base ==4.6.*
