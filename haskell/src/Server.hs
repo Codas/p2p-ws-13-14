@@ -8,6 +8,8 @@ import           Options.Applicative
 import           Reactive.Threepenny
 import           System.IO
 
+import qualified Data.ByteString     as BS
+
 import           Pipes
 import qualified Pipes.ByteString    as PB
 import qualified Pipes.Prelude       as P
@@ -64,6 +66,7 @@ opts = info (serverOpts <**> helper)
   ( fullDesc
  <> progDesc "Start a TCP server and listen to incomming connections"
  <> header "Server - one Server to bring them all and to the socket bind them" )
+
 
 --------------------------------------------------------------
 -- Main server logic. Listen, accept, send events and pring --

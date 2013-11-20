@@ -30,24 +30,24 @@ needed.
 ### Commands Client → Server
 **Regular**:
 
-| Binary | Command            | Sections          | Comments                             |
-| :---:  | :---               | :---              | :---                                 |
-| `0000` | Join               | Topic(s)          | Join / create a topic                |
-| `0001` | Part               | Topic(s)          | Unsubscribe from topic               |
-| `0010` | Ask for Topic List | Nothing           | Requst topic list                    |
-| `0011` | Receive Topic List | Topic(s)          | Receive List of Topics               |
-| `0100` | Message            | Topic(s), Message | Send message to topic                |
-| `0101` | Binary             | Topic(s), Message | Binary stream, big files             |
-| `0110` | Broadcast          | Message           | Send message to all available topics |
+| Binary     | Command            | Sections          | Comments                             |
+| :---:      | :---               | :---              | :---                                 |
+| `0000` (0) | Join               | Topic(s)          | Join / create a topic                |
+| `0001` (1) | Part               | Topic(s)          | Unsubscribe from topic               |
+| `0010` (2) | Ask for Topic List | Nothing           | Requst topic list                    |
+| `0011` (3) | Receive Topic List | Topic(s)          | Receive List of Topics               |
+| `0100` (4) | Message            | Topic(s), Message | Send message to topic                |
+| `0101` (5) | Binary             | Topic(s), Message | Binary stream, big files             |
+| `0110` (6) | Broadcast          | Message           | Send message to all available topics |
 
 **Admin**:
 
 | Binary | Command      | Sections | Comments                            |
 | :---:  | :---         | :---     | :---                                |
-| `0000` | Close        | Nothing  | Shut down server                    |
-| `0001` | Delete topic | Topic    | Unregister everyone from this topic |
-| `0010` | Kick user    | User(s)  | Kick User(s), specified by IPs      |
-| `0100` | Statistics   | Nothing  | Get statistics for this server      |
+| `0000` (0) | Close        | Nothing  | Shut down server                    |
+| `0001` (1) | Delete topic | Topic    | Unregister everyone from this topic |
+| `0010` (2) | Kick user    | User(s)  | Kick User(s), specified by IPs      |
+| `0100` (4) | Statistics   | Nothing  | Get statistics for this server      |
 
 ### Compression (Zip)
 Compression algorithm is [LZ4](https://code.google.com/p/lz4/).

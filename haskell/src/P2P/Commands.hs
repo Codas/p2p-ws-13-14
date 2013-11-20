@@ -1,23 +1,25 @@
-module P2P.Comands where
+module P2P.Commands where
 
 import qualified Data.ByteString as B
+import qualified Data.Text       as T
 
-
-
-data Flags        = Flags { compressed :: Bool}
-type Topic        = B.ByteString
-type Message      = B.ByteString
+data Flags        = Flags { compressed :: Bool } deriving ( Show )
+type Topic        = T.Text
+type Message      = T.Text
 type BinaryStream = B.ByteString
 type Topics       = [Topic]
 
-data Command = Join Flags Topics
-             | Part Flags Topics
+
+data Command = Join
+             | Part
              | AskTopics
-             | ReceiveTopics Flags Topics
-             | Message Topics Message
-             | Binary Topics BinaryStream
-             | Broadcast Message
-             | Close Flags Topics
-             | Delete Flags Topics
-             | Kick Flags Topics
-             | Statistics Flags Topics
+             | ReceiveTopics
+             | Message
+             | Binary
+             | Broadcast
+             -- Admin commands
+             | Close
+             | Delete
+             | Kick
+             | Statistics
+             deriving ( Show )
