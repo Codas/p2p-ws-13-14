@@ -58,13 +58,13 @@ Messages (or any text really) should only be compressed on message sizes > 20
 bytes.  In fact, LZ4 has a hard minimum of 12 bytes if I recall correctly.
 
 ### Length Fields
-Variable from 1-5 bytes.
+Variable from 1-7 bytes.
 
-Basically: Treat first byte special. Use first 3 bits as length marker for the
-length field, the remaining 6 bits as regular number information.
+Basically: Treat  first byte special. Use first 3 bits as length marker for the
+length field, the remaining 5 bits as regular number information.
 
 - `000. ....`: 5 bit number
-- `10.. ....`: 5 bit number followed by 2 bytes of number information
+- `010. ....`: 5 bit number followed by 2 bytes of number information
   (total 21 bit number)
 - `111. ....`: 5 bit number followed by 7 bytes of number information
   (total 61 bit number)
