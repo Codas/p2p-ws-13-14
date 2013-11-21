@@ -21,6 +21,7 @@ acceptFork sock fn = do
     (socket,addr) <- S.accept sock                         -- accept connection.
     handle <- S.socketToHandle socket ReadWriteMode        -- socket -> bidirectional handle.
     hSetBuffering handle (BlockBuffering Nothing)          -- buffer by blocks of data.
+    hSetBinaryMode handle True
     forkIO $ E.finally (fn (handle, addr)) (hClose handle) -- fork new io thread and make sure to
                                                            -- close everything after we are done.
 
@@ -29,6 +30,7 @@ connectTo :: HostName -> Int -> (Handle -> IO b) -> IO b
 connectTo host port fn = do
     handle <- N.connectTo host portNumber -- connect to host and assign handel.
     hSetBuffering handle LineBuffering    -- transmit every line (good for stdin).
+    hSetBinaryMode handle True
     E.finally (fn handle) (hClose handle) -- pass handle to function and make
                                           -- sure to close the handle after we
                                           -- are done or in cass of errors.

@@ -78,19 +78,21 @@ accClients (Evt.NetEvent eType client _) cs =
   where clientS = show client
 
 accClientStats :: Evt.NetEvent -> [ClientStats] -> [ClientStats]
-accClientStats (Evt.NetEvent eType client msgSize) cs =
+accClientStats (Evt.NetEvent eType client info) cs =
   case eType of
     Evt.Disconnected -> Data.List.delete clientS cs
     Evt.Connected    -> cs ++ [clientS]
     Evt.Message      -> map incSize cs
     _                -> cs
-  where clientS = ClientStats client msgSize
-        incSize stat@(ClientStats c s) = if c == client
+  where clientS = ClientStats clientAddr msgSize
+        incSize stat@(ClientStats c s) = if c == clientAddr
                                          then ClientStats c $! s + msgSize
                                          else stat
+        msgSize    = Evt.messageSize info
+        clientAddr = Evt.sockAddr client
 
 accMsgSize :: Evt.NetEvent -> Evt.MessageSize -> Evt.MessageSize
-accMsgSize (Evt.NetEvent eType _ msgSize) size =
+accMsgSize (Evt.NetEvent eType _ info) size =
   case eType of
-    Evt.Message -> size + msgSize
+    Evt.Message -> size + Evt.messageSize info
     _       -> size
