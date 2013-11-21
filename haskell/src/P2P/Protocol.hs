@@ -7,11 +7,17 @@ import qualified Data.Text.Encoding as TE
 import qualified Data.Word          as W
 import           P2P.Commands
 
+-- Parse topics of a given ByteString.
+-- ByteString must contain the length field. Topics are separated by a null-byte.
+-- Any overflowing data of the ByteString is discarded.
 parseTopics :: BS.ByteString -> Maybe [Topic]
 parseTopics bs = case parseBinary bs of
     Just binary -> Just $ map TE.decodeUtf8 $ BS.split (0::W.Word8) binary
     _           -> Nothing
 
+-- Parse the Message of a given ByteString.
+-- ByteString must contain the length field.
+-- Any overflowing data of the ByteString is discarded.
 parseMessage :: BS.ByteString -> Maybe Message
 parseMessage bs = case parseBinary bs of
     Just binary -> Just $ TE.decodeUtf8 binary
@@ -22,6 +28,9 @@ parseBinary bs = case parseLength bs of
     Just (lenLen, len) -> Just (BS.drop lenLen (BS.take len bs))
     _ -> Nothing
 
+-- Parse the header field of the protocol.
+-- Only the byte (Word8) containing the flags and optcode
+-- should be passed. Other bytes will return unpredictable results.
 parseHeader :: W.Word8 -> Maybe (Command, Flags)
 parseHeader byte = case command of
     Just c  -> Just (c, flags)

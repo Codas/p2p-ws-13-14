@@ -30,7 +30,8 @@ Library
   hs-source-dirs:      src
   
   -- Modules included in this library, other than Main.
-  exposed-modules:     P2P.Networking, P2P.Events, P2P.GUI
+  exposed-modules:     P2P.Networking, P2P.Events, P2P.GUI, P2P.Protocol,
+                       P2P.Commands
   
   build-depends:       base ==4.6.*, network ==2.4.1.2, threepenny-gui ==0.4.*,
                        pipes ==4.0.*, pipes-bytestring ==1.0.*,
