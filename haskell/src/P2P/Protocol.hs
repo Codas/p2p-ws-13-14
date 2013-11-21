@@ -1,19 +1,21 @@
 module P2P.Protocol where
 
-import qualified Data.Bits       as Bit
-import qualified Data.ByteString as BS
+import qualified Data.Bits          as Bit
+import qualified Data.ByteString    as BS
 import           Data.List
-import qualified Data.Word       as W
+import qualified Data.Text.Encoding as TE
+import qualified Data.Word          as W
 import           P2P.Commands
 
-parse :: BS.ByteString -> Command
-parse = undefined
-
-parseTopics :: BS.ByteString -> Maybe Topics
-parseTopics = undefined
+parseTopics :: BS.ByteString -> Maybe [Topic]
+parseTopics bs = case parseBinary bs of
+    Just binary -> Just $ map TE.decodeUtf8 $ BS.split (0::W.Word8) binary
+    _           -> Nothing
 
 parseMessage :: BS.ByteString -> Maybe Message
-parseMessage = undefined
+parseMessage bs = case parseBinary bs of
+    Just binary -> Just $ TE.decodeUtf8 binary
+    _           -> Nothing
 
 parseBinary :: BS.ByteString -> Maybe BS.ByteString
 parseBinary bs = case parseLength bs of
