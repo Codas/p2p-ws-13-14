@@ -3,11 +3,11 @@ module P2P.Events
     , module Reactive.Threepenny
     ) where
 
-import qualified System.IO           as IO
-
 import           Control.Applicative
-
+import           Data.Set            (Set)
+import qualified Data.Set            as Set
 import           Reactive.Threepenny
+import qualified System.IO           as IO
 
 import qualified P2P.Commands        as Com
 import qualified P2P.Networking      as Net
@@ -41,7 +41,12 @@ type NetEventGetter = NetEventType -> Event NetEvent
 data Client = Client
               { sockAddr     :: Net.SockAddr
               , clientHandle :: Maybe IO.Handle }
-              deriving ( Eq )
+
+instance Eq Client where
+    (Client a _) ==  (Client a1 _) = a == a1
+
+instance Ord Client where
+    compare (Client a _) (Client a1 _) = compare a a1
 
 instance Show Client where
     show (Client addr _) = show addr
@@ -51,19 +56,23 @@ data NetEventType = Connected
                   | Ready
                   | Join
                   | Part
+                  | FirstJoin
+                  | LastPart
                   | Message
+                  | Broadcast
                   | AnyEvent
                   deriving ( Show, Eq )
 
 data MessageInfo = MessageInfo
                    { messageSize :: Int
-                   , topics      :: [Com.Topic]}
+                   , topics      :: Set Com.Topic}
                    deriving ( Eq )
 
 instance Show MessageInfo where
-    show (MessageInfo 0 []) = "Empty message to nobody"
-    show (MessageInfo 0 t ) = "Empty message to " ++ show t
-    show (MessageInfo s t ) = "Message of size " ++ show s ++ " to " ++ show t
+    show (MessageInfo 0 ts )
+        | Set.null ts = "Empty message to " ++ show ts
+        | otherwise    = "Empty message to nobody"
+    show (MessageInfo s ts ) = "Message of size " ++ show s ++ " to " ++ show ts
 
 data NetEvent = NetEvent NetEventType Client MessageInfo
               deriving ( Eq )
