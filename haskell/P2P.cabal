@@ -48,7 +48,7 @@ Executable server
     -- Other library packages from which modules are imported.
     build-depends:       p2p, pipes ==4.0.*, pipes-bytestring ==1.0.*, utf8-string,
                          optparse-applicative, bytestring ==0.10.0.2, base ==4.6.*, network ==2.4.1.2,
-                         network-simple ==0.3.*, threepenny-gui ==0.4.*, base ==4.6.*, lz4 ==0.2.2
+                         network-simple ==0.3.*, threepenny-gui ==0.4.*, base ==4.6.*, lz4 ==0.2.2, text
     
 Executable client
     -- .hs or .lhs file containing the Main module.
@@ -60,4 +60,4 @@ Executable client
     build-depends:       p2p, pipes ==4.0.*, pipes-bytestring ==1.0.*, utf8-string,
                          optparse-applicative, bytestring ==0.10.0.2, network ==2.4.1.2,
                          network-simple ==0.3.*, threepenny-gui ==0.4.*, base ==4.6.*,
-                         lz4 ==0.2.2
+                         lz4 ==0.2.2, text
