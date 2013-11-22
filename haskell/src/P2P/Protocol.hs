@@ -1,14 +1,14 @@
 module P2P.Protocol where
 
-import           Numeric
-import qualified Data.Bits          as Bit
-import qualified Data.ByteString    as BS
+import qualified Data.Bits            as Bit
+import qualified Data.ByteString      as BS
 import qualified Data.ByteString.Lazy as LS
-import           Data.Int
 import           Data.Char
+import           Data.Int
 import           Data.List
-import qualified Data.Text.Encoding as TE
-import qualified Data.Word          as W
+import qualified Data.Text.Encoding   as TE
+import qualified Data.Word            as W
+import           Numeric
 
 import           P2P.Commands
 
@@ -22,26 +22,26 @@ parseTopics bs = case parseBinary bs of
             topicBinary = BS.split (0::W.Word8) (LS.toStrict binary)
     _           -> Nothing
 
-unparseTopics :: Maybe[Topic] -> BS.ByteString
-unparseTopics (Just topics) = lengthBS `BS.append` topicBS
-    where nullByte = BS.singleton $ (fromIntegral 0 :: W.Word8)
-          topicBS  = BS.init $ foldr (\acc x -> acc `BS.append` nullByte `BS.append` x) BS.empty $ map TE.encodeUtf8 topics
+unparseTopics :: [Topic] -> BS.ByteString
+unparseTopics topics = lengthBS `BS.append` topicBS
+    where nullByte = BS.singleton (0 :: W.Word8)
+          topicBS  = BS.concat $ intersperse nullByte (map TE.encodeUtf8 topics)
           lengthBS = unparseLength $ BS.length topicBS
-unparseTopics Nothing = undefined
 
 -- Parse the Message of a given ByteString.
 -- ByteString must contain the length field.
 -- Any overflowing data of the ByteString is discarded.
 parseMessage :: LS.ByteString -> Maybe (Message, LS.ByteString)
 parseMessage bs = case parseBinary bs of
-    Just (binary, rest) -> Just (TE.decodeUtf8 (LS.toStrict bs),rest)
+    Just (binary, rest) -> Just (TE.decodeUtf8 (LS.toStrict binary),rest)
     _           -> Nothing
 
-unparseMessage :: Maybe Message -> BS.ByteString
-unparseMessage (Just message) =  lengthBS `BS.append` messageBS
+unparseMessage :: Message -> BS.ByteString
+unparseMessage message =  lengthBS `BS.append` messageBS
   where messageBS  = TE.encodeUtf8 message
         lengthBS = unparseLength $ BS.length messageBS
 
+parseBinary :: LS.ByteString -> Maybe (LS.ByteString, LS.ByteString)
 parseBinary bs = case parseLength bs of
     Just (lenLen, len) -> Just (bytes, rest)
       where bytes = LS.drop lenLen (LS.take len bs)
@@ -75,21 +75,20 @@ parseCommand byte = command
               (1:0:1:0:0:_) -> Just Statistics
               _             -> Nothing
 
-unparseCommand :: Maybe Command -> Bool -> BS.ByteString
-unparseCommand command zipEnabled = 
-   case command of
-        Just Join           -> createCommandByteString 0 zipEnabled
-        Just Part           -> createCommandByteString 1 zipEnabled
-        Just AskTopics      -> createCommandByteString 2 zipEnabled
-        Just ReceiveTopics  -> createCommandByteString 3 zipEnabled
-        Just Message        -> createCommandByteString 4 zipEnabled
-        Just Binary         -> createCommandByteString 5 zipEnabled
-        Just Broadcast      -> createCommandByteString 6 zipEnabled
-        Just Close          -> createCommandByteString 16 zipEnabled
-        Just Delete         -> createCommandByteString 17 zipEnabled
-        Just Kick           -> createCommandByteString 18 zipEnabled
-        Just Statistics     -> createCommandByteString 20 zipEnabled
-        Nothing             -> undefined
+unparseCommand :: Command -> Bool -> BS.ByteString
+unparseCommand command z =
+    case command of
+        Join           -> createCommandByteString 0  z
+        Part           -> createCommandByteString 1  z
+        AskTopics      -> createCommandByteString 2  z
+        ReceiveTopics  -> createCommandByteString 3  z
+        Message        -> createCommandByteString 4  z
+        Binary         -> createCommandByteString 5  z
+        Broadcast      -> createCommandByteString 6  z
+        Close          -> createCommandByteString 16 z
+        Delete         -> createCommandByteString 17 z
+        Kick           -> createCommandByteString 18 z
+        Statistics     -> createCommandByteString 20 z
 
 
 parseFlags :: W.Word8 -> Flags
@@ -108,25 +107,26 @@ parseLength bs = if LS.null (LS.take 8 bs)
         lengthBytes = Bit.clearBit (Bit.clearBit  (Bit.clearBit firstByte 5) 6) 7 : lastBytes
 
 unparseLength :: Int -> BS.ByteString
-unparseLength i      =  result
+unparseLength i = result
   where bitCount            = countBits i
-        numberOfBytes       = (bitCount + 2)  `div` 8 * 32 -- with shiftL 5 bits
-        firstByte           = fromIntegral $ numberOfBytes :: W.Word8
+        numberOfBytes       = (bitCount + 2) `div` 8 * 32 -- with shiftL 5 bits
+        firstByte           = fromIntegral numberOfBytes :: W.Word8
         longValueField      = intToWords i
         headValue           = head longValueField
-        needExtraBits       = Bit.testBit headValue 7 || Bit.testBit headValue 6 || Bit.testBit headValue 5
+        needExtraBits       = any (Bit.testBit headValue) [5..7]
         finalFirstByte      = BS.singleton (if needExtraBits then firstByte else headValue + firstByte)
         finalValueField     = BS.pack (if needExtraBits then longValueField else tail longValueField)
         result              = finalFirstByte `BS.append` finalValueField
 
+bytesToInt :: (Integral a, Num a1) => [a] -> a1
 bytesToInt ws = sum $ map bitTupleMul zipBytes
   where subBytes = map fromIntegral ws
         zipBytes = zip subBytes $ reverse [0..(length ws - 1)]
         bitTupleMul (n, i) = ((2^) `fmap` (*8)) i * n
 
------------------------------
--- Bit wiggling operators --
------------------------------
+------------------------------
+-- Bit wiggling operations --
+------------------------------
 to01List :: W.Word8 -> [Int]
 to01List byte = map bitSet bits
   where bitSet i = if Bit.testBit byte i then 1 else 0
@@ -144,7 +144,7 @@ countBits i = length $ showIntAtBase 2 intToDigit i ""
 
 intToWords :: Int -> [W.Word8]
 intToWords i = if i == 0 then []
-               else intToWords (i `div`256) ++ [fromIntegral (i)  :: W.Word8]
+               else intToWords (i `div`256) ++ [fromIntegral i  :: W.Word8]
 
 createCommandByteString :: Int -> Bool -> BS.ByteString
 createCommandByteString cmdNum zipEnabled = BS.pack $ intToWords finalCmdValue
