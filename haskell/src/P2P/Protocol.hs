@@ -44,7 +44,7 @@ unparseMessage message =  lengthBS `BS.append` messageBS
 parseBinary :: LS.ByteString -> Maybe (LS.ByteString, LS.ByteString)
 parseBinary bs = case parseLength bs of
     Just (lenLen, len) -> Just (bytes, rest)
-      where bytes = LS.drop lenLen (LS.take len bs)
+      where bytes =  LS.take len (LS.drop lenLen bs)
             rest  = LS.drop (lenLen + len) bs
     _ -> Nothing
 
