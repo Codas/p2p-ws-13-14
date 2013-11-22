@@ -83,14 +83,14 @@ main = Net.withSocketsDo $ do
     initUIs netEvent options
 
   -- listen for incomig connections.
-    let address = (opAddress options)
-        port    = (opPort options)
+    let address = opAddress options
+        port    = opPort options
     -- TODO: server api verwenden?
     Net.listen address port $ \(listenSocket, listenAddr) -> do
         let server = Evt.Client listenAddr Nothing
             serverInfo   = Evt.MessageInfo 0 Set.empty
         pushEvent $ Evt.NetEvent Evt.Ready server serverInfo
-        topicB <- undefined
+        topicB <- getClientBehavior netEvent
         forever . Net.acceptFork listenSocket $ \(connHandle, remoteAddr) -> do
             let client = Evt.Client remoteAddr (Just connHandle)
             handleClient connHandle client topicB pushEvent
@@ -111,17 +111,19 @@ handleClient handle client topicB pushEvent = do
 -----------------------------------
 
 type RawMessage = (LS.ByteString, Flags)
-type EventTuple b = (Behavior (Set TopicClients), (Evt.NetEvent -> IO b), Evt.Client)
+type EventTuple b = (Behavior (Set TopicClients), Evt.NetEvent -> IO b, Evt.Client)
 
 handleProtocol :: EventTuple b -> LS.ByteString -> IO ()
 handleProtocol evtTuple bs
     | LS.null bs   = return ()
     | otherwise = case P.parseHeader $ LS.head bs of
+        Nothing        -> return ()
         Just (cmd, fl) -> case cmd of
             Join      -> handleJoin      evtTuple raw >>= recurse
             Part      -> handlePart      evtTuple raw >>= recurse
             Message   -> handleMessage   evtTuple raw >>= recurse
             Broadcast -> handleBroadcast evtTuple raw >>= recurse
+            _         -> return ()
             -- AskTopics     -> handleAskTopics      topicB rest fl >>= recurse
             -- ReceiveTopics -> handleReceiveTopics  topicB rest fl >>= recurse
             -- Binary        -> handleBinary         topicB rest fl >>= recurse
@@ -131,7 +133,6 @@ handleProtocol evtTuple bs
             -- Statistics    -> handleStatistrcs     topicB rest fl >>= recurse
           where raw = (LS.tail bs, fl)
                 recurse = handleProtocol evtTuple
-        _ -> return ()
 
 -- client handling
 handleJoin :: EventTuple b -> RawMessage -> IO LS.ByteString
@@ -227,8 +228,8 @@ instance Ord TopicClients where
 clients :: Lens' TopicClients (Set Evt.Client)
 clients = lens _clients (\topicClient t -> topicClient { _clients = t })
 
-getClientBehavior :: Evt.NetEventGetter -> IO (Behavior (Set ClientCon))
-getClientBehavior evt = accumB Set.empty ( accClientCon <$> evt Evt.AnyEvent)
+getClientBehavior :: Evt.NetEventGetter -> IO (Behavior (Set TopicClients))
+getClientBehavior evt = accumB Set.empty ( accTopicClients <$> evt Evt.AnyEvent)
 
 accClientCon :: Evt.NetEvent -> Set ClientCon -> Set ClientCon
 accClientCon (Evt.NetEvent eType c i) cns =
@@ -254,7 +255,7 @@ accTopicClients (Evt.NetEvent eType c i) tcs =
   where ets         = Evt.topics i
         etc         = Set.map (`TopicClients` Set.empty) ets
         addedTopics = Set.union etc tcs
-        cleanup     = Set.filter (\(TopicClients t' cs)  -> not $ Set.null cs)
+        cleanup     = Set.filter (\(TopicClients _ cs)  -> not $ Set.null cs)
         modClients :: (Set Evt.Client -> Set Evt.Client) -> TopicClients -> TopicClients
         modClients f tc
             | Set.member (_topic tc) ets = over clients f tc
