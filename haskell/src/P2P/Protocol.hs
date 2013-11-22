@@ -3,18 +3,23 @@ module P2P.Protocol where
 import           Numeric
 import qualified Data.Bits          as Bit
 import qualified Data.ByteString    as BS
+import qualified Data.ByteString.Lazy as LS
+import           Data.Int
 import           Data.Char
 import           Data.List
 import qualified Data.Text.Encoding as TE
 import qualified Data.Word          as W
+
 import           P2P.Commands
 
 -- Parse topics of a given ByteString.
 -- ByteString must contain the length field. Topics are separated by a null-byte.
 -- Any overflowing data of the ByteString is discarded.
-parseTopics :: BS.ByteString -> Maybe [Topic]
+parseTopics :: LS.ByteString -> Maybe ([Topic], LS.ByteString)
 parseTopics bs = case parseBinary bs of
-    Just binary -> Just $ map TE.decodeUtf8 $ BS.split (0::W.Word8) binary
+    Just (binary, rest) -> Just (topics, rest)
+      where topics = map TE.decodeUtf8 topicBinary
+            topicBinary = BS.split (0::W.Word8) (LS.toStrict binary)
     _           -> Nothing
 
 unparseTopics :: Maybe[Topic] -> BS.ByteString
@@ -27,9 +32,9 @@ unparseTopics Nothing = undefined
 -- Parse the Message of a given ByteString.
 -- ByteString must contain the length field.
 -- Any overflowing data of the ByteString is discarded.
-parseMessage :: BS.ByteString -> Maybe Message
+parseMessage :: LS.ByteString -> Maybe (Message, LS.ByteString)
 parseMessage bs = case parseBinary bs of
-    Just binary -> Just $ TE.decodeUtf8 binary
+    Just (binary, rest) -> Just (TE.decodeUtf8 (LS.toStrict bs),rest)
     _           -> Nothing
 
 unparseMessage :: Maybe Message -> BS.ByteString
@@ -37,9 +42,10 @@ unparseMessage (Just message) =  lengthBS `BS.append` messageBS
   where messageBS  = TE.encodeUtf8 message
         lengthBS = unparseLength $ BS.length messageBS
 
-parseBinary :: BS.ByteString -> Maybe BS.ByteString
 parseBinary bs = case parseLength bs of
-    Just (lenLen, len) -> Just (BS.drop lenLen (BS.take len bs))
+    Just (lenLen, len) -> Just (bytes, rest)
+      where bytes = LS.drop lenLen (LS.take len bs)
+            rest  = LS.drop (lenLen + len) bs
     _ -> Nothing
 
 -- Parse the header field of the protocol.
@@ -90,16 +96,15 @@ parseFlags :: W.Word8 -> Flags
 parseFlags byte = Flags { compressed = comp }
   where comp = Bit.testBit byte 2
 
-
 -- Returns a Tuple of Ints, first one being the length of the length field
 -- in bytes, second one being the length of the coming message / topic etc.
-parseLength :: BS.ByteString -> Maybe (Int, Int)
-parseLength bs = case BS.length bs of
-    0 -> Nothing
-    _ -> Just (lenLen, bytesToInt lengthBytes)
-  where firstByte   = BS.head bs
-        lastBytes   = BS.unpack $ BS.tail $ BS.take lenLen bs
-        lenLen      = 1 + fromIntegral (Bit.shiftR firstByte 5) :: Int
+parseLength :: LS.ByteString -> Maybe (Int64, Int64)
+parseLength bs = if LS.null (LS.take 8 bs)
+                 then Nothing
+                 else Just (lenLen, bytesToInt lengthBytes)
+  where firstByte   = LS.head bs
+        lastBytes   = LS.unpack $ LS.tail $ LS.take lenLen bs
+        lenLen      = 1 + fromIntegral (Bit.shiftR firstByte 5)
         lengthBytes = Bit.clearBit (Bit.clearBit  (Bit.clearBit firstByte 5) 6) 7 : lastBytes
 
 unparseLength :: Int -> BS.ByteString
@@ -114,7 +119,6 @@ unparseLength i      =  result
         finalValueField     = BS.pack (if needExtraBits then longValueField else tail longValueField)
         result              = finalFirstByte `BS.append` finalValueField
 
-bytesToInt :: [W.Word8]  -> Int
 bytesToInt ws = sum $ map bitTupleMul zipBytes
   where subBytes = map fromIntegral ws
         zipBytes = zip subBytes $ reverse [0..(length ws - 1)]

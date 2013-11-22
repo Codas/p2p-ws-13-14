@@ -1,22 +1,19 @@
 module Server where
 
-import qualified Data.ByteString     as BS
-
 import           Control.Applicative
 import           Control.Monad
 import           Options.Applicative
 import           Reactive.Threepenny
 import           System.IO
 
-import qualified Data.ByteString     as BS
+import qualified Data.ByteString      as BS
+import qualified Data.ByteString.Lazy as LS
 
-import           Pipes
-import qualified Pipes.ByteString    as PB
-import qualified Pipes.Prelude       as P
-
-import qualified P2P.Events          as Evt
-import qualified P2P.GUI             as GUI
-import qualified P2P.Networking      as Net
+import           P2P.Commands
+import qualified P2P.Events           as Evt
+import qualified P2P.GUI              as GUI
+import qualified P2P.Networking       as Net
+import qualified P2P.Protocol         as P
 
 -----------------------------------
 -- Command line argument parsing --
@@ -83,28 +80,34 @@ main = Net.withSocketsDo $ do
         port    = (opPort options)
     -- TODO: server api verwenden?
     Net.listen address port $ \(listenSocket, listenAddr) -> do
-        pushEvent $ Evt.NetEvent Evt.Ready listenAddr 0
-        forever . Net.acceptFork listenSocket $ \(connHandle, remoteAddr) ->
-            handleClient connHandle remoteAddr pushEvent
+        let server = Evt.Client listenAddr Nothing
+            serverInfo   = Evt.MessageInfo 0 []
+        pushEvent $ Evt.NetEvent Evt.Ready server serverInfo
+        forever . Net.acceptFork listenSocket $ \(connHandle, remoteAddr) -> do
+            let client = Evt.Client remoteAddr (Just connHandle)
+            handleClient connHandle client pushEvent
 
--- Read content from socket handle, displak it and notify system of events
-handleClient :: Handle -> Net.SockAddr -> (Evt.NetEvent -> IO b) -> IO b
-handleClient handle clientAddr pushEvent = do
-    pushEvent $ Evt.NetEvent Evt.Connected clientAddr 0
-    runEffect $ clientStream >-> logPrinter
-    pushEvent $ Evt.NetEvent Evt.Disconnected clientAddr 0
-  where clientStream    = PB.fromHandle handle
-        logPrinter      = P.tee msgSizeConsumer >-> PB.stdout
-        msgSizeConsumer = mkMsgSizeConsumer pushEvent clientAddr
+-- Read content from socket handle, display it and notify system of events
+handleClient :: Handle -> Evt.Client -> (Evt.NetEvent -> IO b) -> IO ()
+handleClient handle client pushEvent = do
+    let clientInfo = Evt.MessageInfo 0 []
+    _ <- pushEvent $ Evt.NetEvent Evt.Connected client clientInfo
+    clientStream <- LS.hGetContents handle
+    handleProtocol clientStream
+    _ <- pushEvent $ Evt.NetEvent Evt.Disconnected client clientInfo
+    return ()
 
--- Build message size consumer. Basic pipes consumer that fires an msg size event
--- every time a chunk of data arrives.
-mkMsgSizeConsumer :: MonadIO m => (Evt.NetEvent -> IO a) -> Net.SockAddr ->
-                     Proxy () PB.ByteString y' y m ()
-mkMsgSizeConsumer fireNetEvent client = do
-    content <- await
-    liftIO $ fireNetEvent $ Evt.NetEvent Evt.Message client $ BS.length content
-    mkMsgSizeConsumer fireNetEvent client
+
+handleProtocol :: LS.ByteString -> IO ()
+handleProtocol bs
+    | LS.null bs   = return ()
+    | otherwise = case P.parseHeader $ LS.head bs of
+        Nothing -> return ()
+        Just (cmd, flags) -> case cmd of
+            Join       -> undefined
+            Part       -> undefined
+            AskTopics  -> undefined
+            _          -> undefined
 
 -------------------------------
 -- General UI initialization --

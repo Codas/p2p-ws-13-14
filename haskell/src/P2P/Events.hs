@@ -3,10 +3,13 @@ module P2P.Events
     , module Reactive.Threepenny
     ) where
 
+import qualified System.IO           as IO
+
 import           Control.Applicative
 
 import           Reactive.Threepenny
 
+import qualified P2P.Commands        as Com
 import qualified P2P.Networking      as Net
 
 -- Creates an accessor to Disconnect, Connect and Message event streams.
@@ -35,17 +38,41 @@ type MessageSize = Int   -- just an alias to make sure what we are talking about
 -- Alias to make the type signatures more expressive and shorter.
 type NetEventGetter = NetEventType -> Event NetEvent
 
-type Client = Net.SockAddr
+data Client = Client
+              { sockAddr     :: Net.SockAddr
+              , clientHandle :: Maybe IO.Handle }
+              deriving ( Eq )
 
-data NetEventType = Connected | Disconnected | Message | Ready | AnyEvent
+instance Show Client where
+    show (Client addr _) = show addr
+
+data NetEventType = Connected
+                  | Disconnected
+                  | Ready
+                  | Join
+                  | Part
+                  | Message
+                  | AnyEvent
                   deriving ( Show, Eq )
 
-data NetEvent = NetEvent NetEventType Client MessageSize
+data MessageInfo = MessageInfo
+                   { messageSize :: Int
+                   , topics      :: [Com.Topic]}
+                   deriving ( Eq )
+
+instance Show MessageInfo where
+    show (MessageInfo 0 []) = "Empty message to nobody"
+    show (MessageInfo 0 t ) = "Empty message to " ++ show t
+    show (MessageInfo s t ) = "Message of size " ++ show s ++ " to " ++ show t
+
+data NetEvent = NetEvent NetEventType Client MessageInfo
               deriving ( Eq )
 
 instance Show NetEvent where
-    show (NetEvent Connected    client _) = "Client connected: " ++ show client
-    show (NetEvent Disconnected client _) = "Client disconnected: " ++ show client
-    show (NetEvent Message client size)   = show size ++ " bytes received from " ++ show client
-    show (NetEvent Ready addr _)          = "currently listening on " ++ show addr
-    show (NetEvent t a s)                 = "(NetEvent " ++ show t ++ " " ++ show a ++ " " ++ show s ++ ")"
+    show (NetEvent Connected    c _) = "Client connected: " ++ show c
+    show (NetEvent Disconnected c _) = "Client disconnected: " ++ show c
+    show (NetEvent Ready        c _) = "currently listening on " ++ show c
+    show (NetEvent Join         c i) = "Client " ++ show c ++ " joined: " ++ show (topics i)
+    show (NetEvent Part         c i) = "Client " ++ show c ++ " parted: " ++ show (topics i)
+    show (NetEvent Message      c i) = show i ++ " from " ++ show c
+    show (NetEvent t            c i) = "(NetEvent " ++ show t ++ " from " ++ show c ++ ". " ++ show i ++ ")"
