@@ -6,6 +6,7 @@ import qualified Data.ByteString.Lazy as LS
 import           Data.Char
 import           Data.Int
 import           Data.List
+import qualified Data.Text            as T
 import qualified Data.Text.Encoding   as TE
 import qualified Data.Word            as W
 import           Numeric
@@ -22,8 +23,9 @@ parseTopics bs = case parseBinary bs of
             topicBinary = BS.split (0::W.Word8) (LS.toStrict binary)
     _           -> Nothing
 
-unparseTopics :: [Topic] -> BS.ByteString
-unparseTopics topics = lengthBS `BS.append` topicBS
+unparseTopics :: Maybe [Topic] -> BS.ByteString
+unparseTopics Nothing = BS.empty
+unparseTopics (Just topics) = lengthBS `BS.append` topicBS
     where nullByte = BS.singleton (0 :: W.Word8)
           topicBS  = BS.concat $ intersperse nullByte (map TE.encodeUtf8 topics)
           lengthBS = unparseLength $ BS.length topicBS
@@ -36,8 +38,9 @@ parseMessage bs = case parseBinary bs of
     Just (binary, rest) -> Just (TE.decodeUtf8 (LS.toStrict binary),rest)
     _           -> Nothing
 
-unparseMessage :: Message -> BS.ByteString
-unparseMessage message =  lengthBS `BS.append` messageBS
+unparseMessage :: Maybe Message -> (BS.ByteString, Bool)
+unparseMessage Nothing = (BS.empty, False)
+unparseMessage (Just message) =  (lengthBS `BS.append` messageBS, T.length message > 20) 
   where messageBS  = TE.encodeUtf8 message
         lengthBS = unparseLength $ BS.length messageBS
 
