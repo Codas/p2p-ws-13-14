@@ -15,6 +15,7 @@ import           Data.Maybe
 import           Data.Set             (Set)
 import qualified Data.Set             as Set
 import qualified Data.Text            as Text
+import qualified Data.Text.Encoding   as TE
 
 import           P2P.Commands
 import qualified P2P.Events           as Evt
@@ -167,6 +168,10 @@ handleMessage (topicB, pEvt, client) (bs, flags) =
                 handles = handlesForTopics currentTs ts client
             _ <- pEvt $ Evt.NetEvent Evt.Message client i
             forM_ handles $ \h -> BS.hPut h binMsg
+
+            -- TODO: Debugging only, remove when done...
+            -- outputs current message to the console
+            BS.putStr $ TE.encodeUtf8 msg
             return rest
 
 handleBroadcast :: EventTuple b -> RawMessage -> IO LS.ByteString
@@ -179,6 +184,10 @@ handleBroadcast (topicB, pEvt, client) (bs, flags) =
             allHandles =  clientsToHandles allClients client
         _ <- pEvt $ Evt.NetEvent Evt.Broadcast client i
         forM_ allHandles $ \h -> BS.hPut h binMsg
+
+        -- TODO: Debugging only, remove when done...
+        -- outputs current message to the console
+        BS.putStr $ TE.encodeUtf8 msg
         return rest
 
 parseOrFail :: (LS.ByteString -> Maybe b) -> LS.ByteString -> Flags
