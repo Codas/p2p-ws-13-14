@@ -1,16 +1,16 @@
 module Client where
 
-import           Pipes
-import qualified Pipes.ByteString      as PB
-
-import qualified Data.ByteString.Char8 as B8
-import qualified Data.ByteString.UTF8  as UTF
-
+import           Options.Applicative
 import           System.IO
 
-import           Options.Applicative
+import qualified Data.ByteString       as BS
+import qualified Data.ByteString.Char8 as B8
+import qualified Data.ByteString.UTF8  as UTF
+import qualified Data.Text             as Text
+import qualified Data.Text.Encoding    as TE
 
 import qualified P2P.Networking        as Net
+import qualified P2P.Protocol          as P
 
 data Opts = Opts
     { opPort    :: Int
@@ -70,11 +70,12 @@ main = Net.withSocketsDo $ do
 sendMsg :: Handle -> String -> IO ()
 sendMsg handle msg = do
     putStrLn msg
-    B8.hPutStrLn handle ( UTF.fromString msg )
-
+    BS.hPut handle binary
+      where (binary, zipped) = P.unparseMessage $ Just (TE.decodeUtf8 $ UTF.fromString msg)
 
 -- send from stdin
 sendInteractive :: Handle -> IO ()
 sendInteractive handle = do
-    let sPipe = PB.toHandle handle
-    runEffect $ PB.stdin >-> sPipe
+    line <- BS.hGetLine stdin
+    BS.hPut handle $ (\(binary, zipped) -> binary) $ P.unparseMessage $ Just (TE.decodeUtf8 line)
+    sendInteractive handle

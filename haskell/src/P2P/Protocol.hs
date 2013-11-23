@@ -6,9 +6,11 @@ import qualified Data.ByteString.Lazy as LS
 import           Data.Char
 import           Data.Int
 import           Data.List
-import qualified Data.Text            as T
+import           Data.Set             (Set)
+import qualified Data.Set             as Set
 import qualified Data.Text.Encoding   as TE
 import qualified Data.Word            as W
+import qualified Data.Text            as T
 import           Numeric
 
 import           P2P.Commands
@@ -16,18 +18,18 @@ import           P2P.Commands
 -- Parse topics of a given ByteString.
 -- ByteString must contain the length field. Topics are separated by a null-byte.
 -- Any overflowing data of the ByteString is discarded.
-parseTopics :: LS.ByteString -> Maybe ([Topic], LS.ByteString)
+parseTopics :: LS.ByteString -> Maybe (Set Topic, LS.ByteString)
 parseTopics bs = case parseBinary bs of
-    Just (binary, rest) -> Just (topics, rest)
+    Just (binary, rest) -> Just (Set.fromList topics, rest)
       where topics = map TE.decodeUtf8 topicBinary
             topicBinary = BS.split (0::W.Word8) (LS.toStrict binary)
     _           -> Nothing
 
-unparseTopics :: Maybe [Topic] -> BS.ByteString
+unparseTopics :: Maybe Topics -> BS.ByteString
 unparseTopics Nothing = BS.empty
 unparseTopics (Just topics) = lengthBS `BS.append` topicBS
     where nullByte = BS.singleton (0 :: W.Word8)
-          topicBS  = BS.concat $ intersperse nullByte (map TE.encodeUtf8 topics)
+          topicBS  = BS.concat $ intersperse nullByte (map TE.encodeUtf8 $ Set.toList topics)
           lengthBS = unparseLength $ BS.length topicBS
 
 -- Parse the Message of a given ByteString.

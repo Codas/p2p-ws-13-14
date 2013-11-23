@@ -22,7 +22,7 @@ byteStringToMessage :: LS.ByteString -> NetMessage
 byteStringToMessage ls = result
         where mCmd@(Just cmd)   = parseCommand $ LS.head ls
               (topics, rest)    = extractTopics (LS.tail ls) mCmd
-              (message, rest2)  = extractMessage (LS.tail rest) mCmd
+              (message, rest2)  = extractMessage (rest) mCmd
               result = NetMessage cmd topics message
 
 containsTopics :: Maybe Command -> Bool
@@ -47,11 +47,11 @@ containsMessage (Just cmd) = case cmd of
 extractTopics :: LS.ByteString -> Maybe Command -> (Maybe Topics, LS.ByteString)
 extractTopics ls Nothing = (Nothing, ls)
 extractTopics ls cmd     = if containsTopics cmd then (Just topics, rest) else (Nothing, ls)
-       where Just tTuple    =  parseTopics $ LS.tail ls
+       where Just tTuple    =  parseTopics ls
              (topics, rest) = tTuple
 
 extractMessage :: LS.ByteString -> Maybe Command -> (Maybe Message, LS.ByteString)
 extractMessage ls Nothing = (Nothing, ls)
 extractMessage ls cmd     = if containsMessage cmd then (Just message, rest) else (Nothing, ls)
-       where Just mTuple     = parseMessage $ LS.tail ls
+       where Just mTuple     = parseMessage ls
              (message, rest) = mTuple
