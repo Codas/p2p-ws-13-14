@@ -113,7 +113,6 @@ handleClient handle client topicB pushEvent = do
 -- Protocol and client handling. --
 -----------------------------------
 
-type RawMessage = (LS.ByteString, Flags)
 type EventTuple b = (Behavior (Set TopicClients), Evt.NetEvent -> IO b, Evt.Client)
 
 handleProtocol :: EventTuple b -> LS.ByteString -> IO ()
@@ -140,7 +139,6 @@ handleJoin (topicB, pEvt, client) nMsg = case M.topics nMsg of
         _ <- pEvt $ Evt.NetEvent Evt.FirstJoin client (Evt.MessageInfo 0 newTopics)
         _ <- pEvt $ Evt.NetEvent Evt.Join client i
         return ()
-
 
 handlePart :: EventTuple b -> M.NetMessage -> IO ()
 handlePart (topicB, pEvt, client) nMsg = case M.topics nMsg of
