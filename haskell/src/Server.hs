@@ -160,7 +160,7 @@ handleMessage (topicB, pEvt, client) nMsg = case nMsg of
             binMsg  = M.messageToByteString nMsg
             subTs   = Set.filter (\tc -> Set.member (_topic tc) ts) currentTs
         _ <- pEvt $ Evt.NetEvent Evt.Message client i
-        forClientHandless subTs client $ \h -> BS.hPut h binMsg
+        forClientHandles subTs client $ \h -> BS.hPut h binMsg
 
         -- TODO: Debugging only, remove when done...
         -- outputs current message to the console
@@ -176,7 +176,7 @@ handleBroadcast (topicB, pEvt, client) nMsg = case M.message nMsg of
         let i          = Evt.MessageInfo (Text.length msg) Set.empty
             binMsg     = M.messageToByteString nMsg
         _ <- pEvt $ Evt.NetEvent Evt.Broadcast client i
-        forClientHandless currentTs client $ \h -> BS.hPut h binMsg
+        forClientHandles currentTs client $ \h -> BS.hPut h binMsg
 
         -- TODO: Debugging only, remove when done...
         -- outputs current message to the console
@@ -189,8 +189,8 @@ clientsToHandles cs c = mapMaybe Evt.clientHandle noCBClient
 
 -- concurrently execute function for all client handles in the topicClients set.
 -- Exclude single client from the set.
-forClientHandless :: Set TopicClients -> Evt.Client -> (Handle -> IO ()) -> IO ()
-forClientHandless tcs c fn = forM_ handles $ forkIO . fn
+forClientHandles :: Set TopicClients -> Evt.Client -> (Handle -> IO ()) -> IO ()
+forClientHandles tcs c fn = forM_ handles $ forkIO . fn
   where cs = Set.foldr (Set.union . _clients) Set.empty tcs
         handles = clientsToHandles cs c
 
