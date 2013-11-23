@@ -1,6 +1,7 @@
 module Server where
 
 import           Control.Applicative
+import           Control.Concurrent   (forkIO)
 import           Control.Lens
 import           Control.Monad
 import           Control.Monad.Trans  (liftIO)
@@ -20,6 +21,7 @@ import qualified Data.Text.Encoding   as TE
 import           P2P.Commands
 import qualified P2P.Events           as Evt
 import qualified P2P.GUI              as GUI
+import qualified P2P.Messages         as M
 import qualified P2P.Networking       as Net
 import qualified P2P.Protocol         as P
 
@@ -117,93 +119,82 @@ type EventTuple b = (Behavior (Set TopicClients), Evt.NetEvent -> IO b, Evt.Clie
 handleProtocol :: EventTuple b -> LS.ByteString -> IO ()
 handleProtocol evtTuple bs
     | LS.null bs   = return ()
-    | otherwise = case P.parseHeader $ LS.head bs of
-        Nothing        -> return ()
-        Just (cmd, fl) -> case cmd of
-            Join      -> handleJoin      evtTuple raw >>= recurse
-            Part      -> handlePart      evtTuple raw >>= recurse
-            Message   -> handleMessage   evtTuple raw >>= recurse
-            Broadcast -> handleBroadcast evtTuple raw >>= recurse
-            _         -> return ()
-            -- AskTopics     -> handleAskTopics      topicB rest fl >>= recurse
-            -- ReceiveTopics -> handleReceiveTopics  topicB rest fl >>= recurse
-            -- Binary        -> handleBinary         topicB rest fl >>= recurse
-            -- Close         -> handleClose          topicB rest fl >>= recurse
-            -- Delete        -> handleDelete         topicB rest fl >>= recurse
-            -- Kick          -> handleKick                  rest fl >>= recurse
-            -- Statistics    -> handleStatistrcs     topicB rest fl >>= recurse
-          where raw = (LS.tail bs, fl)
-                recurse = handleProtocol evtTuple
+    | otherwise = do
+      let (nMsg, rest) = M.byteStringToMessage bs
+      case M.command nMsg of
+          Join      -> handleJoin      evtTuple nMsg
+          Part      -> handlePart      evtTuple nMsg
+          Message   -> handleMessage   evtTuple nMsg
+          Broadcast -> handleBroadcast evtTuple nMsg
+          _         -> return ()
+      handleProtocol evtTuple rest
 
 -- client handling
-handleJoin :: EventTuple b -> RawMessage -> IO LS.ByteString
-handleJoin (topicB, pEvt, client) (bs, flags) =
-    parseOrFail P.parseTopics bs flags $ \(ts, rest) -> do
+handleJoin :: EventTuple b -> M.NetMessage -> IO ()
+handleJoin (topicB, pEvt, client) nMsg = case M.topics nMsg of
+    Nothing -> return ()
+    Just ts -> do
         currentTs <- currentValue topicB
         let newTopics = ts Set.\\ Set.map _topic currentTs
             i         = Evt.MessageInfo 0 ts
         _ <- pEvt $ Evt.NetEvent Evt.FirstJoin client (Evt.MessageInfo 0 newTopics)
         _ <- pEvt $ Evt.NetEvent Evt.Join client i
-        return rest
+        return ()
 
 
-handlePart :: EventTuple b -> RawMessage -> IO LS.ByteString
-handlePart (topicB, pEvt, client) (bs, flags) =
-    parseOrFail P.parseTopics bs flags $ \(ts, rest) -> do
+handlePart :: EventTuple b -> M.NetMessage -> IO ()
+handlePart (topicB, pEvt, client) nMsg = case M.topics nMsg of
+    Nothing -> return ()
+    Just ts -> do
         currentTs <- currentValue topicB
         let legTopics = Set.map _topic $ Set.filter (\tc -> _clients tc == cSet) currentTs
             i         = Evt.MessageInfo 0 ts
             cSet = Set.singleton client
         _ <- pEvt $ Evt.NetEvent Evt.LastPart client (Evt.MessageInfo 0 legTopics)
         _ <- pEvt $ Evt.NetEvent Evt.Join client i
-        return rest
+        return ()
 
-handleMessage :: EventTuple b -> RawMessage -> IO LS.ByteString
-handleMessage (topicB, pEvt, client) (bs, flags) =
-    parseOrFail P.parseTopics bs flags $ \(ts, _) ->
-        parseOrFail P.parseMessage bs flags $ \(msg, rest) -> do
-            currentTs <- currentValue topicB
-            let i                 = Evt.MessageInfo (Text.length msg) ts
-                (binMsg, zipped)  = P.unparseMessage (Just msg)
-                handles           = handlesForTopics currentTs ts client
-            _ <- pEvt $ Evt.NetEvent Evt.Message client i
-            forM_ handles $ \h -> BS.hPut h binMsg
-
-            -- TODO: Debugging only, remove when done...
-            -- outputs current message to the console
-            BS.putStr $ TE.encodeUtf8 msg
-            return rest
-
-handleBroadcast :: EventTuple b -> RawMessage -> IO LS.ByteString
-handleBroadcast (topicB, pEvt, client) (bs, flags) =
-    parseOrFail P.parseMessage bs flags $ \(msg, rest) -> do
+handleMessage :: EventTuple b -> M.NetMessage -> IO ()
+handleMessage (topicB, pEvt, client) nMsg = case nMsg of
+    (M.NetMessage _ (Just ts) (Just msg)) -> do
         currentTs <- currentValue topicB
-        let i                    = Evt.MessageInfo (Text.length msg) Set.empty
-            (binMsg, zipped)     = P.unparseMessage (Just msg)
-            allClients           = Set.foldr (Set.union . _clients) Set.empty currentTs
-            allHandles           =  clientsToHandles allClients client
-        _ <- pEvt $ Evt.NetEvent Evt.Broadcast client i
-        forM_ allHandles $ \h -> BS.hPut h binMsg
+        let i       = Evt.MessageInfo (Text.length msg) ts
+            binMsg  = M.messageToByteString nMsg
+            subTs   = Set.filter (\tc -> Set.member (_topic tc) ts) currentTs
+        _ <- pEvt $ Evt.NetEvent Evt.Message client i
+        forClientHandless subTs client $ \h -> BS.hPut h binMsg
 
         -- TODO: Debugging only, remove when done...
         -- outputs current message to the console
         BS.putStr $ TE.encodeUtf8 msg
-        return rest
+        return ()
+    _ -> return ()
 
-parseOrFail :: (LS.ByteString -> Maybe b) -> LS.ByteString -> Flags
-            -> (b -> IO LS.ByteString) -> IO LS.ByteString
-parseOrFail fn bs flags succFn = case fn bs of
-    Just b -> succFn b
-    Nothing -> return LS.empty
+handleBroadcast :: EventTuple b -> M.NetMessage -> IO ()
+handleBroadcast (topicB, pEvt, client) nMsg = case M.message nMsg of
+    Nothing  -> return ()
+    Just msg -> do
+        currentTs <- currentValue topicB
+        let i          = Evt.MessageInfo (Text.length msg) Set.empty
+            binMsg     = M.messageToByteString nMsg
+        _ <- pEvt $ Evt.NetEvent Evt.Broadcast client i
+        forClientHandless currentTs client $ \h -> BS.hPut h binMsg
 
-handlesForTopics :: Set TopicClients -> Set Topic -> Evt.Client -> [Handle]
-handlesForTopics tcs ts = clientsToHandles subClients
-    where subTopics  = Set.filter (\tc -> Set.member (_topic tc) ts) tcs
-          subClients = Set.foldr (Set.union . _clients) Set.empty subTopics
+        -- TODO: Debugging only, remove when done...
+        -- outputs current message to the console
+        BS.putStr $ TE.encodeUtf8 msg
+        return ()
 
 clientsToHandles :: Set Evt.Client -> Evt.Client -> [Handle]
 clientsToHandles cs c = mapMaybe Evt.clientHandle noCBClient
-     where noCBClient = Set.toList $ Set.filter (/= c) cs
+  where noCBClient = Set.toList $ Set.filter (/= c) cs
+
+-- concurrently execute function for all client handles in the topicClients set.
+-- Exclude single client from the set.
+forClientHandless :: Set TopicClients -> Evt.Client -> (Handle -> IO ()) -> IO ()
+forClientHandless tcs c fn = forM_ handles $ forkIO . fn
+  where cs = Set.foldr (Set.union . _clients) Set.empty tcs
+        handles = clientsToHandles cs c
 
 --------------------------
 -- Events and behaviors --
