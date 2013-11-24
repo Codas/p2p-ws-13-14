@@ -1,8 +1,10 @@
 module P2P.Messages where
 
+import           Control.Lens
 import qualified Data.ByteString      as BS
 import qualified Data.ByteString.Lazy as LS
 import qualified Data.Text            as T
+
 import           P2P.Commands
 import           P2P.Compression
 import           P2P.Protocol
@@ -12,6 +14,9 @@ data NetMessage = NetMessage
                   , topics      :: Maybe Topics
 	              , message     :: Maybe Message }
                   deriving (Show)
+
+topicsL :: Lens' NetMessage (Maybe Topics)
+topicsL = lens topics (\netMessage t -> netMessage { topics = t })
 
 messageToByteString :: NetMessage -> BS.ByteString
 messageToByteString (NetMessage cmd ts msg) = result

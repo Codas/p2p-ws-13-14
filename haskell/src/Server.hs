@@ -2,7 +2,7 @@ module Server where
 
 import           Control.Applicative
 import           Control.Concurrent   (forkIO)
-import           Control.Lens
+import qualified Control.Lens         as L
 import           Control.Monad
 import           Control.Monad.Trans  (liftIO)
 import           Options.Applicative
@@ -180,15 +180,13 @@ handlePart (topicB, _, pEvt, client) nMsg = case M.topics nMsg of
         return ()
 
 handleMessage :: EventTuple b -> M.NetMessage -> IO ()
-handleMessage (topicB, _, pEvt, client) nMsg = case nMsg of
+handleMessage (_, clientB, pEvt, client) nMsg = case nMsg of
     (M.NetMessage _ (Just ts) (Just msg)) -> do
-        currentTs <- currentValue topicB
-        let i       = Evt.MessageInfo (Text.length msg) ts
-            binMsg  = M.messageToByteString nMsg
-            subTs   = Set.filter (\tc -> Set.member (Evt._topic tc) ts) currentTs
+        currentCs <- currentValue clientB
+        let i            = Evt.MessageInfo (Text.length msg) ts
+            subCs        = targetedClients ts client currentCs
         _ <- pEvt $ Evt.NetEvent Evt.Message client i
-
-        forClientHandles subTs client $ \h -> BS.hPut h binMsg >> hFlush h
+        writeToAllC subCs nMsg
 
         -- TODO: Debugging only, remove when done...
         -- outputs current message to the console
@@ -201,31 +199,36 @@ handleBroadcast (_, clientB, pEvt, client) nMsg = case M.message nMsg of
     Nothing  -> return ()
     Just msg -> do
         currentCs <- currentValue clientB
-        let i          = Evt.MessageInfo (Text.length msg) Set.empty
-            binMsg     = M.messageToByteString nMsg
-            cs = mapMaybe (Evt.clientHandle . Evt._client ) $ Set.toList currentCs
+        let i = Evt.MessageInfo (Text.length msg) Set.empty
         _ <- pEvt $ Evt.NetEvent Evt.Broadcast client i
-        forM_ cs $ \h -> BS.hPut h binMsg >> hFlush h
+        writeToAllC currentCs nMsg
 
         -- TODO: Debugging only, remove when done...
         -- outputs current message to the console
         Text.putStrLn msg
         return ()
 
-clientsToHandles :: Set Evt.Client -> Evt.Client -> [Handle]
-clientsToHandles cs c = mapMaybe Evt.clientHandle noCBClient
-  where noCBClient = Set.toList $ Set.filter (/= c) cs
+writeToAllC :: Set Evt.ClientCon -> M.NetMessage -> IO ()
+writeToAllC cs nMsg = forM_ (Set.toList cs) $ \cn -> do
+    let h      = fromJust $ Evt.clientHandle (Evt._client cn)
+        binMsg = sanitizedBinaryMessage nMsg cn
+    BS.hPut h binMsg
+    hFlush h
 
--- concurrently execute function for all client handles in the topicClients set.
--- Exclude single client from the set.
-forClientHandles :: Set Evt.TopicClients -> Evt.Client -> (Handle -> IO ()) -> IO ()
-forClientHandles tcs c fn = (forM_ handles $ forkIO . fn) >> print handles
-  where cs = Set.foldr (Set.union . Evt._clients) Set.empty tcs
-        handles = clientsToHandles cs c
+hasTopics :: Topics -> Evt.ClientCon -> Bool
+hasTopics ts cn = not $ Set.null (Set.intersection (Evt._topics cn) ts)
 
---------------------------
--- Events and behaviors --
---------------------------
+hasHandle :: Evt.ClientCon -> Bool
+hasHandle cn = isJust $ Evt.clientHandle (Evt._client cn)
+
+sanitizedBinaryMessage :: M.NetMessage -> Evt.ClientCon -> BS.ByteString
+sanitizedBinaryMessage nMsg cn = M.messageToByteString sMsg
+   where sMsg = L.over M.topicsL (fmap (Set.intersection ts)) nMsg
+         ts   = Evt._topics cn
+
+targetedClients :: Topics -> Evt.Client -> Set Evt.ClientCon -> Set Evt.ClientCon
+targetedClients ts c = Set.filter keep
+    where keep cn = hasTopics ts cn && hasHandle cn && Evt._client cn /= c
 
 -------------------------------
 -- General UI initialization --

@@ -51,7 +51,7 @@ instance Ord Client where
     compare (Client a _ _) (Client a1 _ _) = compare a a1
 
 instance Show Client where
-    show (Client addr _ size) = show addr ++ " (" ++ show size ++ ") bytes"
+    show (Client addr _ size) = show addr ++ " (" ++ show size ++ " bytes)"
 
 data NetEventType = Connected
                   | Disconnected
