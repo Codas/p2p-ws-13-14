@@ -29,6 +29,7 @@ import qualified P2P.Protocol         as P
 data Opts = Opts
   { opPort    :: String
   , opAddress :: Net.HostPreference
+  , relay     :: Maybe String
   , opConsole :: Bool
   , opGui     :: Bool }
   deriving Show
@@ -48,10 +49,18 @@ serverOpts = Opts
          ( long "address"
         <> short 'a'
         <> value Net.HostAny
-        <> metavar "HOST"
+        <> metavar "RELAY"
         <> reader hostReader
         <> showDefaultWith (const "Any address")
         <> help "Address to accept incoming connections from. E.g. localhost.")
+     <*> nullOption
+         ( long "relay"
+        <> short 'r'
+        <> value Nothing
+        <> metavar "RELAY"
+        <> reader auto
+        <> showDefault
+        <> help "Relay to connect to.")
      <*> switch
          ( long "console"
         <> short 'c'
