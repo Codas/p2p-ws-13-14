@@ -172,13 +172,13 @@ func (c *Connection) writeMessage(msg []byte) error {
 	return nil
 }
 
-func (c *Connection) ReadPackage() (p *Package, err error) {
+func (c *Connection) ReadPacket() (p *Packet, err error) {
 	b, err := c.r.ReadByte()
 	if err != nil {
 		return nil, err
 	}
 
-	p = &Package{}
+	p = &Packet{}
 	p.Flags = Flags((b & MaskAction) >> 3)
 	compressed := b&MaskZip != 0
 	if p.hasTopics() {
@@ -195,13 +195,9 @@ func (c *Connection) ReadPackage() (p *Package, err error) {
 }
 
 func (c *Connection) readTopics() (topics []string, err error) {
-	length, err := c.decodeLength()
+	data, err := c.readMessage(false)
 	if err != nil {
 		return nil, err
-	}
-	data := make([]byte, length)
-	if _, err = c.r.Read(data); err != nil {
-		return
 	}
 	laststart := 0
 	for i, b := range data {
