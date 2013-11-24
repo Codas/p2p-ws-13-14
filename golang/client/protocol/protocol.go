@@ -102,39 +102,18 @@ func (c *Connection) writeAll(flag Flags) error {
 	return c.w.Flush()
 }
 
-func (c *Connection) WriteJoinTopics(topics []string) error {
-	if err := c.bufferTopics(topics); err != nil {
-		return err
+func (c *Connection) Write(f Flags, topics []string, message string) error {
+	if msgHasTopics(f) {
+		if err := c.bufferTopics(topics); err != nil {
+			return err
+		}
 	}
-	return c.writeAll(FlagJoin)
-}
-
-func (c *Connection) WritePartTopics(topics []string) error {
-	if err := c.bufferTopics(topics); err != nil {
-		return err
+	if msgHasMessage(f) {
+		if err := c.bufferMessage([]byte(message)); err != nil {
+			return err
+		}
 	}
-	return c.writeAll(FlagPart)
-}
-
-func (c *Connection) WriteBroadCast(message string) error {
-	if err := c.bufferMessage([]byte(message)); err != nil {
-		return err
-	}
-	return c.writeAll(FlagBroadCast)
-}
-
-func (c *Connection) WriteMessage(topics []string, message string) error {
-	if err := c.bufferTopics(topics); err != nil {
-		return err
-	}
-	if err := c.bufferMessage([]byte(message)); err != nil {
-		return err
-	}
-	return c.writeAll(FlagMessage)
-}
-
-func (c *Connection) WriteAskTopics() error {
-	return c.writeAll(FlagTopicAsk)
+	return c.writeAll(f)
 }
 
 func (c *Connection) writeFlags(actionFlag Flags, compressed bool) error {

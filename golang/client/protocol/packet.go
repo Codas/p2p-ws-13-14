@@ -31,15 +31,23 @@ type Packet struct {
 }
 
 func (p *Packet) hasTopics() bool {
-	switch p.Flags {
+	return msgHasTopics(p.Flags)
+}
+
+func (p *Packet) hasMessage() bool {
+	return msgHasMessage(p.Flags)
+}
+
+func msgHasTopics(f Flags) bool {
+	switch f {
 	case FlagJoin, FlagPart, FlagTopicReceive, FlagMessage, FlagBinary, FlagDeleteTopic, FlagKickUser:
 		return true
 	}
 	return false
 }
 
-func (p *Packet) hasMessage() bool {
-	switch p.Flags {
+func msgHasMessage(f Flags) bool {
+	switch f {
 	case FlagMessage, FlagBinary, FlagBroadCast:
 		return true
 	}

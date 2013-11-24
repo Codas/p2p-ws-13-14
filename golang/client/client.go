@@ -29,19 +29,19 @@ func parseStdIO(pc *protocol.Connection) {
 			text = text[idx+1:]
 			switch command {
 			case "j":
-				pc.WriteJoinTopics(strings.Split(text, ","))
+				pc.Write(protocol.FlagJoin, strings.Split(text, ","), "")
 			case "l":
-				pc.WritePartTopics(strings.Split(text, ","))
+				pc.Write(protocol.FlagPart, strings.Split(text, ","), "")
 			case "b":
-				pc.WriteBroadCast(text)
+				pc.Write(protocol.FlagBroadCast, nil, text)
 			default:
 				topics := strings.Split(command, ",")
-				pc.WriteMessage(topics, text)
+				pc.Write(protocol.FlagMessage, topics, text)
 			}
 		} else {
 			switch text {
 			case "t":
-				pc.WriteAskTopics()
+				pc.Write(protocol.FlagTopicAsk, nil, "")
 			case "q":
 				pc.Close()
 			}
