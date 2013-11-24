@@ -94,7 +94,13 @@ func (c *Connection) writeAll(flag Flags) error {
 	if err := c.writeFlags(flag, compressed); err != nil {
 		return err
 	}
-	if len(data) > 0 {
+	length := len(data)
+	if length > 0 {
+		if compressed {
+			if err := EncodeLength(c.w, uint64(length)); err != nil {
+				return err
+			}
+		}
 		if _, err := c.w.Write(data); err != nil {
 			return err
 		}
