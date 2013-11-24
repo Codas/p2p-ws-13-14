@@ -31,7 +31,7 @@ instance Show ClientStats where
 init :: Evt.NetEventGetter -> Behavior (Set Evt.ClientCon) -> IO ()
 init netEvent clientsB = do
     let static = "../wwwroot/"
-    bytesB <- accumB 0 ( accMsgSize <$> netEvent Evt.Message )
+    bytesB <- accumB 0 ( accMsgSize <$> netEvent Evt.AnyEvent )
 
     forkIO $ UI.startGUI UI.defaultConfig
       { UI.tpPort       = 10000
@@ -63,7 +63,7 @@ setupGUI clientsB bytesB window = void $ do
     element topicsView # sink text ( concatTopics <$> clientsB )
     element netStat # sink text ( show <$> bytesB )
   where concatClients = intercalate "\n" . map show . Set.toList
-        concatTopics  = concat . intersperse ", " . map Text.unpack . topicSet
+        concatTopics  = intercalate ", " . map Text.unpack . topicSet
         topicSet      = Set.toList . Set.foldr Set.union Set.empty . Set.map Evt._topics
 
 layout :: [UI Element] -> [UI Element]
