@@ -16,8 +16,8 @@ decompress :: BS.ByteString -> BS.ByteString
 decompress msg = fromMaybe msg (LZ.decompress msg)
 
 
-decompressStream :: LS.ByteString -> Int64 -> LS.ByteString
-decompressStream bs len = LS.append decompressed rest
+decompressStream :: LS.ByteString -> Int64 -> (LS.ByteString, LS.ByteString)
+decompressStream bs len = (decompressed, rest)
   where decompressed = LS.fromStrict $ decompress $ LS.toStrict $ LS.take len bs
         rest         = LS.drop len bs
 

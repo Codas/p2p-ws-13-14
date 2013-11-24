@@ -40,9 +40,9 @@ parseMessage bs = case parseBinary bs of
     Just (binary, rest) -> Just (TE.decodeUtf8 (LS.toStrict binary),rest)
     _           -> Nothing
 
-unparseMessage :: Maybe Message -> (BS.ByteString, Bool)
-unparseMessage Nothing = (BS.empty, False)
-unparseMessage (Just message) =  (lengthBS `BS.append` messageBS, T.length message > 20) 
+unparseMessage :: Maybe Message -> BS.ByteString
+unparseMessage Nothing = BS.empty
+unparseMessage (Just message) =  lengthBS `BS.append` messageBS
   where messageBS  = TE.encodeUtf8 message
         lengthBS = unparseLength $ BS.length messageBS
 
