@@ -166,14 +166,11 @@ func (c *Connection) bufferMessage(msg []byte) error {
 }
 
 func (c *Connection) ReadPacket() (p *Packet, err error) {
-	b, err := c.r.ReadByte()
+	p, compressed, err := c.readFlags()
 	if err != nil {
 		return nil, err
 	}
 
-	p = &Packet{}
-	p.Flags = Flags((b & MaskAction) >> 3)
-	compressed := b&MaskZip != 0
 	if p.hasTopics() {
 		if p.Topics, err = c.readTopics(); err != nil {
 			return nil, err
@@ -185,6 +182,17 @@ func (c *Connection) ReadPacket() (p *Packet, err error) {
 		}
 	}
 	return
+}
+
+func (c *Connection) readFlags() (p *Packet, compressed bool, err error) {
+	b, err := c.r.ReadByte()
+	if err != nil {
+		return nil, false, err
+	}
+	p = &Packet{
+		Flags: Flags((b & MaskAction) >> 3),
+	}
+	return p, b&MaskZip != 0, nil
 }
 
 func (c *Connection) readTopics() (topics []string, err error) {
