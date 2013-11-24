@@ -6,6 +6,11 @@ import (
 	"io"
 )
 
+type byteReader interface {
+	io.Reader
+	io.ByteReader
+}
+
 type Connection struct {
 	b bytes.Buffer
 	r *bufio.Reader
@@ -58,9 +63,9 @@ func EncodeLength(bw io.ByteWriter, length uint64) error {
 	return nil
 }
 
-func (c *Connection) decodeLength() (length uint64, err error) {
+func DecodeLength(br byteReader) (length uint64, err error) {
 	// read first byte
-	b, err := c.r.ReadByte()
+	b, err := br.ReadByte()
 	if err != nil {
 		return 0, err
 	}
@@ -70,7 +75,7 @@ func (c *Connection) decodeLength() (length uint64, err error) {
 	bytes := make([]byte, numbytes)
 	// clear out our three length bits
 	bytes[0] = b & 31
-	_, err = c.r.Read(bytes[1:])
+	_, err = br.Read(bytes[1:])
 	if err != nil {
 		return 0, err
 	}
@@ -171,13 +176,22 @@ func (c *Connection) ReadPacket() (p *Packet, err error) {
 		return nil, err
 	}
 
+	r := byteReader(c.r)
+	if compressed {
+		var data []byte
+		if data, err = c.getMessage(r, compressed); err != nil {
+			return nil, err
+		}
+		r = bytes.NewBuffer(data)
+	}
+
 	if p.hasTopics() {
-		if p.Topics, err = c.readTopics(); err != nil {
+		if p.Topics, err = c.getTopics(r); err != nil {
 			return nil, err
 		}
 	}
 	if p.hasMessage() {
-		if p.Message, err = c.readMessage(compressed); err != nil {
+		if p.Message, err = c.getMessage(r, false); err != nil {
 			return nil, err
 		}
 	}
@@ -195,8 +209,8 @@ func (c *Connection) readFlags() (p *Packet, compressed bool, err error) {
 	return p, b&MaskZip != 0, nil
 }
 
-func (c *Connection) readTopics() (topics []string, err error) {
-	data, err := c.readMessage(false)
+func (c *Connection) getTopics(br byteReader) (topics []string, err error) {
+	data, err := c.getMessage(br, false)
 	if err != nil {
 		return nil, err
 	}
@@ -214,8 +228,8 @@ func (c *Connection) readTopics() (topics []string, err error) {
 	return
 }
 
-func (c *Connection) readMessage(compressed bool) (msg []byte, err error) {
-	length, err := c.decodeLength()
+func (c *Connection) getMessage(r byteReader, compressed bool) (msg []byte, err error) {
+	length, err := DecodeLength(r)
 	if err != nil {
 		return nil, err
 	}
@@ -223,7 +237,7 @@ func (c *Connection) readMessage(compressed bool) (msg []byte, err error) {
 		return nil, nil
 	}
 	msg = make([]byte, length)
-	if _, err = c.r.Read(msg); err != nil {
+	if _, err = r.Read(msg); err != nil {
 		return
 	}
 	if compressed {
