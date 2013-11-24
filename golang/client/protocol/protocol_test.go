@@ -24,7 +24,7 @@ type message struct {
 	text   string
 }
 
-var messages = []message{
+var testCases = []message{
 	{[]string{"food", "drink"}, loremIpsum},
 }
 
@@ -50,7 +50,7 @@ func testTopicsIdentical(m message, p *Packet, t *testing.T) {
 func TestJoinTopics(t *testing.T) {
 	cb := &closeBuffer{}
 	c := NewConnection(cb)
-	for _, m := range messages {
+	for _, m := range testCases {
 		if err := c.WriteJoinTopics(m.topics); err != nil {
 			t.Errorf("writing join topics failed: (%s) %#v", err, m)
 		}
@@ -68,7 +68,7 @@ func TestJoinTopics(t *testing.T) {
 func TestPartTopics(t *testing.T) {
 	cb := &closeBuffer{}
 	c := NewConnection(cb)
-	for _, m := range messages {
+	for _, m := range testCases {
 		if err := c.WritePartTopics(m.topics); err != nil {
 			t.Errorf("writing join topics failed: (%s) %#v", err, m)
 		}
@@ -82,3 +82,24 @@ func TestPartTopics(t *testing.T) {
 		testTopicsIdentical(m, p, t)
 	}
 }
+
+func TestBroadcast(t *testing.T) {
+	cb := &closeBuffer{}
+	c := NewConnection(cb)
+	for _, m := range testCases {
+		if err := c.WriteBroadCast(m.text); err != nil {
+			t.Errorf("writing join topics failed: (%s) %#v", err, m)
+		}
+		p, err := c.ReadPacket()
+		if err != nil {
+			t.Errorf("reading join topics failed: (%s) %#v", err, m)
+		}
+		if p.Flags != FlagBroadCast {
+			t.Errorf("flag not correctly set: %d != %d", p.Flags, FlagBroadCast)
+		}
+		if m.text != string(p.Message) {
+			t.Errorf("message not correctly transmitted: %s != %s", m.text, string(p.Message))
+		}
+	}
+}
+
