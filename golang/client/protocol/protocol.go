@@ -133,7 +133,7 @@ func (c *Connection) WriteAskTopics() error {
 }
 
 func (c *Connection) writeFlags(actionFlag Flags, compressed bool) error {
-	var code byte = actionFlag << 3
+	code := byte(actionFlag << 3)
 	if compressed {
 		code |= MaskZip
 	}
