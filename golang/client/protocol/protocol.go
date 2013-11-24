@@ -127,7 +127,7 @@ func (c *Connection) writeFlags(actionFlag Flags, compressed bool) error {
 	if compressed {
 		code |= MaskZip
 	}
-	return c.b.WriteByte(code)
+	return c.w.WriteByte(code)
 }
 
 func (c *Connection) bufferTopics(topics []string) error {
