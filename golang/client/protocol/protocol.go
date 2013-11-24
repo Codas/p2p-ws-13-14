@@ -87,15 +87,18 @@ func DecodeLength(br byteReader) (length uint64, err error) {
 	return
 }
 
-func (c *Connection) compressBuffer() (data []byte, compressed bool) {
+func (c *Connection) compressBuffer() (data []byte, compressed bool, err error) {
 	data = c.b.Bytes()
-	data, compressed = CompressMessage(data)
+	data, compressed, err = CompressMessage(data)
 	c.b.Reset()
 	return
 }
 
 func (c *Connection) writeAll(flag Flags) error {
-	data, compressed := c.compressBuffer()
+	data, compressed, err := c.compressBuffer()
+	if err != nil {
+		return err
+	}
 	if err := c.writeFlags(flag, compressed); err != nil {
 		return err
 	}
@@ -241,7 +244,7 @@ func (c *Connection) getMessage(r byteReader, compressed bool) (msg []byte, err 
 		return
 	}
 	if compressed {
-		msg = DecompressMessage(msg)
+		msg, err = DecompressMessage(msg)
 	}
 	return
 }
