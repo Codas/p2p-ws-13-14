@@ -81,7 +81,7 @@ func (c *Connection) decodeLength() (length uint64, err error) {
 }
 
 func (c *Connection) WriteJoinTopics(topics []string) error {
-	if err := c.w.WriteByte(FlagJoin << 3); err != nil {
+	if err := c.writeFlags(FlagJoin, false); err != nil {
 		return err
 	}
 	if err := c.writeTopics(topics); err != nil {
@@ -91,7 +91,7 @@ func (c *Connection) WriteJoinTopics(topics []string) error {
 }
 
 func (c *Connection) WritePartTopics(topics []string) error {
-	if err := c.w.WriteByte(FlagPart << 3); err != nil {
+	if err := c.writeFlags(FlagPart, false); err != nil {
 		return err
 	}
 	if err := c.writeTopics(topics); err != nil {
@@ -102,11 +102,7 @@ func (c *Connection) WritePartTopics(topics []string) error {
 
 func (c *Connection) WriteBroadCast(message string) error {
 	msg, compressed := CompressMessage([]byte(message))
-	var code byte = FlagBroadCast << 3
-	if compressed {
-		code |= MaskZip
-	}
-	if err := c.w.WriteByte(code); err != nil {
+	if err := c.writeFlags(FlagBroadCast, compressed); err != nil {
 		return err
 	}
 	if err := c.writeMessage(msg); err != nil {
@@ -117,11 +113,7 @@ func (c *Connection) WriteBroadCast(message string) error {
 
 func (c *Connection) WriteMessage(topics []string, message string) error {
 	msg, compressed := CompressMessage([]byte(message))
-	var code byte = FlagMessage << 3
-	if compressed {
-		code |= MaskZip
-	}
-	if err := c.w.WriteByte(code); err != nil {
+	if err := c.writeFlags(FlagMessage, compressed); err != nil {
 		return err
 	}
 	if err := c.writeTopics(topics); err != nil {
@@ -134,10 +126,18 @@ func (c *Connection) WriteMessage(topics []string, message string) error {
 }
 
 func (c *Connection) WriteAskTopics() error {
-	if err := c.w.WriteByte(FlagTopicAsk << 3); err != nil {
+	if err := c.writeFlags(FlagTopicAsk, false); err != nil {
 		return err
 	}
 	return c.w.Flush()
+}
+
+func (c *Connection) writeFlags(actionFlag Flags, compressed bool) error {
+	var code byte = actionFlag << 3
+	if compressed {
+		code |= MaskZip
+	}
+	return c.w.WriteByte(code)
 }
 
 func (c *Connection) writeTopics(topics []string) error {
