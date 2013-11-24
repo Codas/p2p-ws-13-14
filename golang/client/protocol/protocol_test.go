@@ -123,3 +123,18 @@ func TestMessage(t *testing.T) {
 		}
 	}
 }
+
+func TestWriteAskTopic(t *testing.T) {
+	cb := &closeBuffer{}
+	c := NewConnection(cb)
+	if err := c.WriteAskTopics(); err != nil {
+		t.Errorf("writing join topics failed: (%s)", err)
+	}
+	p, err := c.ReadPacket()
+	if err != nil {
+		t.Errorf("reading join topics failed: (%s)", err)
+	}
+	if p.Flags != FlagTopicAsk {
+		t.Errorf("flag not correctly set: %d != %d", p.Flags, FlagTopicAsk)
+	}
+}
