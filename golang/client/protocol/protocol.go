@@ -82,7 +82,7 @@ func (c *Connection) decodeLength() (length uint64, err error) {
 	return
 }
 
-func (c *Connection) compressMessage() (data []byte, compressed bool) {
+func (c *Connection) compressBuffer() (data []byte, compressed bool) {
 	data = c.b.Bytes()
 	data, compressed = CompressMessage(data)
 	c.b.Reset()
@@ -90,7 +90,7 @@ func (c *Connection) compressMessage() (data []byte, compressed bool) {
 }
 
 func (c *Connection) writeAll(flag Flags) error {
-	data, compressed := c.compressMessage()
+	data, compressed := c.compressBuffer()
 	if err := c.writeFlags(flag, compressed); err != nil {
 		return err
 	}
