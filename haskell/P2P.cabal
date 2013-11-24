@@ -37,7 +37,7 @@ Library
                        pipes ==4.0.*, pipes-bytestring ==1.0.*,
                        network-simple ==0.3.*, utf8-string,
                        optparse-applicative, bytestring ==0.10.0.2, binary-strict,
-                       text, lz4 ==0.2.2, containers, lens, mtl
+                       text, snappy, containers, lens, mtl
  
 Executable server
     -- .hs or .lhs file containing the Main module.

@@ -26,8 +26,6 @@ import qualified P2P.Messages         as M
 import qualified P2P.Networking       as Net
 import qualified P2P.Protocol         as P
 
-import           Debug.Trace
-
 -----------------------------------
 -- Command line argument parsing --
 -----------------------------------

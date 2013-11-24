@@ -4,6 +4,7 @@ import           Control.Lens
 import qualified Data.ByteString      as BS
 import qualified Data.ByteString.Lazy as LS
 import qualified Data.Text            as T
+import qualified Data.Text.Encoding   as TE
 
 import           P2P.Commands
 import           P2P.Compression
@@ -23,9 +24,9 @@ messageToByteString (NetMessage cmd ts msg) = result
         where topicBS             = unparseTopics ts
               messageBS           = unparseMessage msg
               body                = topicBS `BS.append` messageBS
-              zipping             = BS.length body > 1000
+              zipping             = BS.length body > 20
               cmdBS               = unparseCommand cmd zipping
-              (compressedBody, _) = compress body
+              compressedBody      = compress body
               zippedBody          = unparseLength (BS.length compressedBody) `BS.append` compressedBody
               result              = cmdBS `BS.append` (if zipping then zippedBody else body)
 
@@ -50,7 +51,6 @@ handleZippedMessage ls mCmd = (NetMessage cmd ts msg, rest)
               (decompressedBody, rest)              = decompressStream (LS.drop lengthLength ls) compressedLength
               (ts, topicRest)                       = extractTopics decompressedBody mCmd
               (msg, _)                              = extractMessage topicRest mCmd
-
 
 containsTopics :: Maybe Command -> Bool
 containsTopics Nothing = False
