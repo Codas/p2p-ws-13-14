@@ -19,6 +19,23 @@ func TestEncoding(t *testing.T) {
 	}
 }
 
+func TestLengthEncoding(t *testing.T) {
+	numbers := []uint64{0, 10, 23682, 20, 217843682, 234, 1 << 5, 1 << 13, 1 << 21, 1 << 29, 1 << 37, 1 << 45, 1 << 53}
+	var b bytes.Buffer
+	for _, n := range numbers {
+		if err := EncodeLength(&b, n); err != nil {
+			t.Errorf("encoding number failed: (%s) %d", err, n)
+		}
+		l, err := DecodeLength(&b)
+		if err != nil {
+			t.Errorf("decoding number failed: (%s) %d", err, n)
+		}
+		if n != l {
+			t.Errorf("encode <-> decode length mismatch: %d != %d", n, l)
+		}
+	}
+}
+
 type message struct {
 	topics []string
 	text   string
@@ -56,7 +73,7 @@ func TestJoinTopics(t *testing.T) {
 	cb := &closeBuffer{}
 	c := NewConnection(cb)
 	for _, m := range testCases {
-		if err := c.WriteJoinTopics(m.topics); err != nil {
+		if err := c.Write(FlagJoin, m.topics, ""); err != nil {
 			t.Errorf("writing join topics failed: (%s) %#v", err, m)
 		}
 		p, err := c.ReadPacket()
@@ -74,7 +91,7 @@ func TestPartTopics(t *testing.T) {
 	cb := &closeBuffer{}
 	c := NewConnection(cb)
 	for _, m := range testCases {
-		if err := c.WritePartTopics(m.topics); err != nil {
+		if err := c.Write(FlagPart, m.topics, ""); err != nil {
 			t.Errorf("writing join topics failed: (%s) %#v", err, m)
 		}
 		p, err := c.ReadPacket()
@@ -92,7 +109,7 @@ func TestBroadcast(t *testing.T) {
 	cb := &closeBuffer{}
 	c := NewConnection(cb)
 	for _, m := range testCases {
-		if err := c.WriteBroadCast(m.text); err != nil {
+		if err := c.Write(FlagBroadCast, nil, m.text); err != nil {
 			t.Errorf("writing join topics failed: (%s) %#v", err, m)
 		}
 		p, err := c.ReadPacket()
@@ -112,7 +129,7 @@ func TestMessage(t *testing.T) {
 	cb := &closeBuffer{}
 	c := NewConnection(cb)
 	for _, m := range testCases {
-		if err := c.WriteMessage(m.topics, m.text); err != nil {
+		if err := c.Write(FlagMessage, m.topics, m.text); err != nil {
 			t.Errorf("writing join topics failed: (%s) %#v", err, m)
 		}
 		p, err := c.ReadPacket()
@@ -132,7 +149,7 @@ func TestMessage(t *testing.T) {
 func TestWriteAskTopic(t *testing.T) {
 	cb := &closeBuffer{}
 	c := NewConnection(cb)
-	if err := c.WriteAskTopics(); err != nil {
+	if err := c.Write(FlagTopicAsk, nil, ""); err != nil {
 		t.Errorf("writing join topics failed: (%s)", err)
 	}
 	p, err := c.ReadPacket()

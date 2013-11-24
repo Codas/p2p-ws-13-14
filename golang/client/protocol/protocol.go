@@ -2,10 +2,17 @@ package protocol
 
 import (
 	"bufio"
+	"bytes"
 	"io"
 )
 
+type byteReader interface {
+	io.Reader
+	io.ByteReader
+}
+
 type Connection struct {
+	b bytes.Buffer
 	r *bufio.Reader
 	w *bufio.Writer
 	c io.Closer
@@ -42,23 +49,23 @@ func numBytes(length uint64) int {
 	}
 }
 
-func (c *Connection) encodeLength(length uint64) error {
+func EncodeLength(bw io.ByteWriter, length uint64) error {
 	numbytes := numBytes(length)
 	for i := 0; i < numbytes; i++ {
 		b := byte((length >> (8 * uint(numbytes-i-1))) & 0xFF)
 		if i == 0 {
 			b |= byte((numbytes - 1) << 5)
 		}
-		if err := c.w.WriteByte(b); err != nil {
+		if err := bw.WriteByte(b); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (c *Connection) decodeLength() (length uint64, err error) {
+func DecodeLength(br byteReader) (length uint64, err error) {
 	// read first byte
-	b, err := c.r.ReadByte()
+	b, err := br.ReadByte()
 	if err != nil {
 		return 0, err
 	}
@@ -68,7 +75,7 @@ func (c *Connection) decodeLength() (length uint64, err error) {
 	bytes := make([]byte, numbytes)
 	// clear out our three length bits
 	bytes[0] = b & 31
-	_, err = c.r.Read(bytes[1:])
+	_, err = br.Read(bytes[1:])
 	if err != nil {
 		return 0, err
 	}
@@ -80,56 +87,44 @@ func (c *Connection) decodeLength() (length uint64, err error) {
 	return
 }
 
-func (c *Connection) WriteJoinTopics(topics []string) error {
-	if err := c.writeFlags(FlagJoin, false); err != nil {
+func (c *Connection) compressBuffer() (data []byte, compressed bool) {
+	data = c.b.Bytes()
+	data, compressed = CompressMessage(data)
+	c.b.Reset()
+	return
+}
+
+func (c *Connection) writeAll(flag Flags) error {
+	data, compressed := c.compressBuffer()
+	if err := c.writeFlags(flag, compressed); err != nil {
 		return err
 	}
-	if err := c.writeTopics(topics); err != nil {
-		return err
+	length := len(data)
+	if length > 0 {
+		if compressed {
+			if err := EncodeLength(c.w, uint64(length)); err != nil {
+				return err
+			}
+		}
+		if _, err := c.w.Write(data); err != nil {
+			return err
+		}
 	}
 	return c.w.Flush()
 }
 
-func (c *Connection) WritePartTopics(topics []string) error {
-	if err := c.writeFlags(FlagPart, false); err != nil {
-		return err
+func (c *Connection) Write(f Flags, topics []string, message string) error {
+	if msgHasTopics(f) {
+		if err := c.bufferTopics(topics); err != nil {
+			return err
+		}
 	}
-	if err := c.writeTopics(topics); err != nil {
-		return err
+	if msgHasMessage(f) {
+		if err := c.bufferMessage([]byte(message)); err != nil {
+			return err
+		}
 	}
-	return c.w.Flush()
-}
-
-func (c *Connection) WriteBroadCast(message string) error {
-	msg, compressed := CompressMessage([]byte(message))
-	if err := c.writeFlags(FlagBroadCast, compressed); err != nil {
-		return err
-	}
-	if err := c.writeMessage(msg); err != nil {
-		return err
-	}
-	return c.w.Flush()
-}
-
-func (c *Connection) WriteMessage(topics []string, message string) error {
-	msg, compressed := CompressMessage([]byte(message))
-	if err := c.writeFlags(FlagMessage, compressed); err != nil {
-		return err
-	}
-	if err := c.writeTopics(topics); err != nil {
-		return err
-	}
-	if err := c.writeMessage(msg); err != nil {
-		return err
-	}
-	return c.w.Flush()
-}
-
-func (c *Connection) WriteAskTopics() error {
-	if err := c.writeFlags(FlagTopicAsk, false); err != nil {
-		return err
-	}
-	return c.w.Flush()
+	return c.writeAll(f)
 }
 
 func (c *Connection) writeFlags(actionFlag Flags, compressed bool) error {
@@ -140,7 +135,7 @@ func (c *Connection) writeFlags(actionFlag Flags, compressed bool) error {
 	return c.w.WriteByte(code)
 }
 
-func (c *Connection) writeTopics(topics []string) error {
+func (c *Connection) bufferTopics(topics []string) error {
 	var length uint64
 	if len(topics) > 1 {
 		length = uint64(len(topics) - 1)
@@ -148,15 +143,15 @@ func (c *Connection) writeTopics(topics []string) error {
 	for _, t := range topics {
 		length += uint64(len(t))
 	}
-	if err := c.encodeLength(length); err != nil {
+	if err := EncodeLength(&c.b, length); err != nil {
 		return err
 	}
 	for i, t := range topics {
-		if _, err := c.w.WriteString(t); err != nil {
+		if _, err := c.b.WriteString(t); err != nil {
 			return err
 		}
 		if i < len(topics)-1 {
-			if err := c.w.WriteByte(0); err != nil {
+			if err := c.b.WriteByte(0); err != nil {
 				return err
 			}
 		}
@@ -164,41 +159,58 @@ func (c *Connection) writeTopics(topics []string) error {
 	return nil
 }
 
-func (c *Connection) writeMessage(msg []byte) error {
+func (c *Connection) bufferMessage(msg []byte) error {
 	length := len(msg)
-	if err := c.encodeLength(uint64(length)); err != nil {
+	if err := EncodeLength(&c.b, uint64(length)); err != nil {
 		return err
 	}
-	if _, err := c.w.Write(msg); err != nil {
+	if _, err := c.b.Write(msg); err != nil {
 		return err
 	}
 	return nil
 }
 
 func (c *Connection) ReadPacket() (p *Packet, err error) {
-	b, err := c.r.ReadByte()
+	p, compressed, err := c.readFlags()
 	if err != nil {
 		return nil, err
 	}
 
-	p = &Packet{}
-	p.Flags = Flags((b & MaskAction) >> 3)
-	compressed := b&MaskZip != 0
+	r := byteReader(c.r)
+	if compressed {
+		var data []byte
+		if data, err = c.getMessage(r, compressed); err != nil {
+			return nil, err
+		}
+		r = bytes.NewBuffer(data)
+	}
+
 	if p.hasTopics() {
-		if p.Topics, err = c.readTopics(); err != nil {
+		if p.Topics, err = c.getTopics(r); err != nil {
 			return nil, err
 		}
 	}
 	if p.hasMessage() {
-		if p.Message, err = c.readMessage(compressed); err != nil {
+		if p.Message, err = c.getMessage(r, false); err != nil {
 			return nil, err
 		}
 	}
 	return
 }
 
-func (c *Connection) readTopics() (topics []string, err error) {
-	data, err := c.readMessage(false)
+func (c *Connection) readFlags() (p *Packet, compressed bool, err error) {
+	b, err := c.r.ReadByte()
+	if err != nil {
+		return nil, false, err
+	}
+	p = &Packet{
+		Flags: Flags((b & MaskAction) >> 3),
+	}
+	return p, b&MaskZip != 0, nil
+}
+
+func (c *Connection) getTopics(br byteReader) (topics []string, err error) {
+	data, err := c.getMessage(br, false)
 	if err != nil {
 		return nil, err
 	}
@@ -216,8 +228,8 @@ func (c *Connection) readTopics() (topics []string, err error) {
 	return
 }
 
-func (c *Connection) readMessage(compressed bool) (msg []byte, err error) {
-	length, err := c.decodeLength()
+func (c *Connection) getMessage(r byteReader, compressed bool) (msg []byte, err error) {
+	length, err := DecodeLength(r)
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +237,7 @@ func (c *Connection) readMessage(compressed bool) (msg []byte, err error) {
 		return nil, nil
 	}
 	msg = make([]byte, length)
-	if _, err = c.r.Read(msg); err != nil {
+	if _, err = r.Read(msg); err != nil {
 		return
 	}
 	if compressed {
