@@ -3,7 +3,7 @@ package protocol
 
 import lz4 "github.com/salviati/go-lz4"
 
-func compressMessage(msg []byte) (cMsg []byte, compressed bool) {
+func CompressMessage(msg []byte) (cMsg []byte, compressed bool) {
 	length := len(msg)
 	if length <= 20 {
 		return msg, false
@@ -15,7 +15,7 @@ func compressMessage(msg []byte) (cMsg []byte, compressed bool) {
 	return cMsg[:length], true
 }
 
-func decompressMessage(msg []byte) (dMsg []byte) {
+func DecompressMessage(msg []byte) (dMsg []byte) {
 	osize := len(msg) * 4 // guess length ?
 	dMsg = make([]byte, osize)
 	length := lz4.Decompress(msg, dMsg, osize)

@@ -101,7 +101,7 @@ func (c *Connection) WritePartTopics(topics []string) error {
 }
 
 func (c *Connection) WriteBroadCast(message string) error {
-	msg, compressed := compressMessage([]byte(message))
+	msg, compressed := CompressMessage([]byte(message))
 	var code byte = FlagBroadCast << 3
 	if compressed {
 		code |= MaskZip
@@ -116,7 +116,7 @@ func (c *Connection) WriteBroadCast(message string) error {
 }
 
 func (c *Connection) WriteMessage(topics []string, message string) error {
-	msg, compressed := compressMessage([]byte(message))
+	msg, compressed := CompressMessage([]byte(message))
 	var code byte = FlagMessage << 3
 	if compressed {
 		code |= MaskZip
@@ -220,7 +220,7 @@ func (c *Connection) readMessage(compressed bool) (msg []byte, err error) {
 		return
 	}
 	if compressed {
-		msg = decompressMessage(msg)
+		msg = DecompressMessage(msg)
 	}
 	return
 }
