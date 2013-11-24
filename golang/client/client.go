@@ -75,9 +75,9 @@ func main() {
 	go parseStdIO(pc)
 
 	for {
-		p, err := pc.ReadPackage()
+		p, err := pc.ReadPacket()
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "Error reading package: ", err)
+			fmt.Fprintln(os.Stderr, "Error reading Packet: ", err)
 			return
 		}
 		switch p.Flags {

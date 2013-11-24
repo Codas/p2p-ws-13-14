@@ -24,13 +24,13 @@ const (
 type Flags int
 
 // Package type
-type Package struct {
+type Packet struct {
 	Flags   Flags
 	Topics  []string
 	Message []byte
 }
 
-func (p *Package) hasTopics() bool {
+func (p *Packet) hasTopics() bool {
 	switch p.Flags {
 	case FlagJoin, FlagPart, FlagTopicReceive, FlagMessage, FlagBinary, FlagDeleteTopic, FlagKickUser:
 		return true
@@ -38,7 +38,7 @@ func (p *Package) hasTopics() bool {
 	return false
 }
 
-func (p *Package) hasMessage() bool {
+func (p *Packet) hasMessage() bool {
 	switch p.Flags {
 	case FlagMessage, FlagBinary, FlagBroadCast:
 		return true
