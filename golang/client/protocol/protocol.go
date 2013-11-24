@@ -91,7 +91,7 @@ func (c *Connection) compressMessage() (data []byte, compressed bool) {
 
 func (c *Connection) writeAll(flag Flags) error {
 	data, compressed := c.compressMessage()
-	if err := c.writeFlags(FlagJoin, compressed); err != nil {
+	if err := c.writeFlags(flag, compressed); err != nil {
 		return err
 	}
 	if len(data) > 0 {
