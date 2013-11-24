@@ -43,7 +43,7 @@ data Client = Client
               , clientHandle :: Maybe IO.Handle }
 
 instance Eq Client where
-    (Client a _) ==  (Client a1 _) = a == a1
+  c1 == c2 = show c1 == show c2
 
 instance Ord Client where
     compare (Client a _) (Client a1 _) = compare a a1

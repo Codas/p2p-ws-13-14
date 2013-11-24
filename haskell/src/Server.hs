@@ -26,6 +26,8 @@ import qualified P2P.Messages         as M
 import qualified P2P.Networking       as Net
 import qualified P2P.Protocol         as P
 
+import           Debug.Trace
+
 -----------------------------------
 -- Command line argument parsing --
 -----------------------------------
@@ -163,6 +165,9 @@ handleJoin (topicB, _, pEvt, client) nMsg = case M.topics nMsg of
             i         = Evt.MessageInfo 0 ts
         _ <- pEvt $ Evt.NetEvent Evt.FirstJoin client (Evt.MessageInfo 0 newTopics)
         _ <- pEvt $ Evt.NetEvent Evt.Join client i
+
+        currentTs' <- currentValue topicB
+        print currentTs'
         return ()
 
 handlePart :: EventTuple b -> M.NetMessage -> IO ()
@@ -174,7 +179,9 @@ handlePart (topicB, _, pEvt, client) nMsg = case M.topics nMsg of
             i         = Evt.MessageInfo 0 ts
             cSet = Set.singleton client
         _ <- pEvt $ Evt.NetEvent Evt.LastPart client (Evt.MessageInfo 0 legTopics)
-        _ <- pEvt $ Evt.NetEvent Evt.Join client i
+        _ <- pEvt $ Evt.NetEvent Evt.Part client i
+        currentTs' <- currentValue topicB
+        print currentTs'
         return ()
 
 handleMessage :: EventTuple b -> M.NetMessage -> IO ()
@@ -204,8 +211,6 @@ handleBroadcast (_, clientB, pEvt, client) nMsg = case M.message nMsg of
             cs = mapMaybe (Evt.clientHandle . _client ) $ Set.toList currentCs
         _ <- pEvt $ Evt.NetEvent Evt.Broadcast client i
         forM_ cs $ \h -> BS.hPut h binMsg >> hFlush h
-        print cs
-        print binMsg
 
         -- TODO: Debugging only, remove when done...
         -- outputs current message to the console
@@ -281,12 +286,14 @@ accTopicClients (Evt.NetEvent eType c i) tcs =
   case eType of
     Evt.Join         -> Set.map (modClients $ Set.insert c) addedTopics
     Evt.Part         -> cleanup $ Set.map (modClients (Set.delete c)) tcs
+    Evt.Disconnected -> cleanup $ Set.map (over clients (Set.delete c)) tcs
     _                -> tcs
   where ets         = Evt.topics i
         etc         = Set.map (`TopicClients` Set.empty) ets
-        addedTopics = Set.union etc tcs
+        addedTopics = Set.union tcs etc
         cleanup     = Set.filter (\(TopicClients _ cs)  -> not $ Set.null cs)
         modClients :: (Set Evt.Client -> Set Evt.Client) -> TopicClients -> TopicClients
+        modClients f tc | trace ("searched: " ++ show (_clients tc) ++ " client: " ++ show c) False = undefined
         modClients f tc
             | Set.member (_topic tc) ets = over clients f tc
             | otherwise = tc
