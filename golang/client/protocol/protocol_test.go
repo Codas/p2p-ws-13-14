@@ -26,6 +26,11 @@ type message struct {
 
 var testCases = []message{
 	{[]string{"food", "drink"}, loremIpsum},
+	{[]string{}, loremIpsum},
+	{[]string{"crazy channel with whitespaces"}, loremIpsum},
+	{[]string{"testTopic"}, "little text"},
+	{[]string{"testTopic", "perhaps even unicode character like π, ϖ, Π"}, "little text"},
+	{[]string{"", "this was a channel with an empty name"}, ""},
 }
 
 type closeBuffer struct {
