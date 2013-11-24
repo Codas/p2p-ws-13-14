@@ -44,14 +44,14 @@ func numBytes(length uint64) int {
 	}
 }
 
-func (c *Connection) encodeLength(length uint64) error {
+func EncodeLength(bw io.ByteWriter, length uint64) error {
 	numbytes := numBytes(length)
 	for i := 0; i < numbytes; i++ {
 		b := byte((length >> (8 * uint(numbytes-i-1))) & 0xFF)
 		if i == 0 {
 			b |= byte((numbytes - 1) << 5)
 		}
-		if err := c.b.WriteByte(b); err != nil {
+		if err := bw.WriteByte(b); err != nil {
 			return err
 		}
 	}
@@ -138,7 +138,7 @@ func (c *Connection) bufferTopics(topics []string) error {
 	for _, t := range topics {
 		length += uint64(len(t))
 	}
-	if err := c.encodeLength(length); err != nil {
+	if err := EncodeLength(&c.b, length); err != nil {
 		return err
 	}
 	for i, t := range topics {
@@ -156,7 +156,7 @@ func (c *Connection) bufferTopics(topics []string) error {
 
 func (c *Connection) bufferMessage(msg []byte) error {
 	length := len(msg)
-	if err := c.encodeLength(uint64(length)); err != nil {
+	if err := EncodeLength(&c.b, uint64(length)); err != nil {
 		return err
 	}
 	if _, err := c.b.Write(msg); err != nil {
