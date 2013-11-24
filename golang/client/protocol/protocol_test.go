@@ -58,6 +58,27 @@ func TestJoinTopics(t *testing.T) {
 		if err != nil {
 			t.Errorf("reading join topics failed: (%s) %#v", err, m)
 		}
+		if p.Flags != FlagJoin {
+			t.Errorf("flag not correctly set: %d != %d", p.Flags, FlagJoin)
+		}
+		testTopicsIdentical(m, p, t)
+	}
+}
+
+func TestPartTopics(t *testing.T) {
+	cb := &closeBuffer{}
+	c := NewConnection(cb)
+	for _, m := range messages {
+		if err := c.WritePartTopics(m.topics); err != nil {
+			t.Errorf("writing join topics failed: (%s) %#v", err, m)
+		}
+		p, err := c.ReadPacket()
+		if err != nil {
+			t.Errorf("reading join topics failed: (%s) %#v", err, m)
+		}
+		if p.Flags != FlagPart {
+			t.Errorf("flag not correctly set: %d != %d", p.Flags, FlagPart)
+		}
 		testTopicsIdentical(m, p, t)
 	}
 }
