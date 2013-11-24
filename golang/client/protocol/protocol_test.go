@@ -103,3 +103,23 @@ func TestBroadcast(t *testing.T) {
 	}
 }
 
+func TestMessage(t *testing.T) {
+	cb := &closeBuffer{}
+	c := NewConnection(cb)
+	for _, m := range testCases {
+		if err := c.WriteMessage(m.topics, m.text); err != nil {
+			t.Errorf("writing join topics failed: (%s) %#v", err, m)
+		}
+		p, err := c.ReadPacket()
+		if err != nil {
+			t.Errorf("reading join topics failed: (%s) %#v", err, m)
+		}
+		if p.Flags != FlagMessage {
+			t.Errorf("flag not correctly set: %d != %d", p.Flags, FlagMessage)
+		}
+		testTopicsIdentical(m, p, t)
+		if m.text != string(p.Message) {
+			t.Errorf("message not correctly transmitted: %s != %s", m.text, string(p.Message))
+		}
+	}
+}
