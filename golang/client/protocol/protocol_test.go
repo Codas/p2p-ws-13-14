@@ -19,6 +19,23 @@ func TestEncoding(t *testing.T) {
 	}
 }
 
+func TestLengthEncoding(t *testing.T) {
+	numbers := []uint64{0, 10, 23682, 20, 217843682, 234, 1 << 5, 1 << 13, 1 << 21, 1 << 29, 1 << 37, 1 << 45, 1 << 53}
+	var b bytes.Buffer
+	for _, n := range numbers {
+		if err := EncodeLength(&b, n); err != nil {
+			t.Errorf("encoding number failed: (%s) %d", err, n)
+		}
+		l, err := DecodeLength(&b)
+		if err != nil {
+			t.Errorf("decoding number failed: (%s) %d", err, n)
+		}
+		if n != l {
+			t.Errorf("encode <-> decode length mismatch: %d != %d", n, l)
+		}
+	}
+}
+
 type message struct {
 	topics []string
 	text   string
