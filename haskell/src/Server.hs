@@ -152,6 +152,7 @@ handleProtocol evtTuple bs
           Part      -> handlePart      evtTuple nMsg
           Message   -> handleMessage   evtTuple nMsg
           Broadcast -> handleBroadcast evtTuple nMsg
+          AskTopics -> handleBroadcast evtTuple nMsg
           _         -> return ()
       handleProtocol evtTuple rest
 
@@ -206,6 +207,24 @@ handleBroadcast (_, clientB, pEvt, client) nMsg = case M.message nMsg of
         -- TODO: Debugging only, remove when done...
         -- outputs current message to the console
         Text.putStrLn msg
+        return ()
+
+handleTopicReq :: EventTuple b -> M.NetMessage -> IO ()
+handleTopicReq (topicB, _, pEvt, client) nMsg = case M.message nMsg of
+    Nothing  -> return ()
+    Just msg -> do
+        currentTs <- currentValue topicB
+        let topics     = Set.map Evt._topic currentTs
+            i          = Evt.MessageInfo 0 topics
+            binMsg     = M.messageToByteString (M.NetMessage ReceiveTopics (Just topics) Nothing)
+            (Just c)   = Evt.clientHandle client
+        _ <- pEvt $ Evt.NetEvent Evt.Broadcast client i
+        BS.hPut c binMsg >> hFlush c
+
+        -- TODO: Debugging only, remove when done...
+        -- outputs current message to the console
+        Text.putStrLn msg
+        Text.putStrLn $ Text.pack $ show binMsg
         return ()
 
 writeToAllC :: Set Evt.ClientCon -> M.NetMessage -> IO ()
