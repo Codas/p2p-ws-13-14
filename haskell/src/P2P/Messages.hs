@@ -15,20 +15,19 @@ data NetMessage = NetMessage
 
 messageToByteString :: NetMessage -> BS.ByteString
 messageToByteString (NetMessage cmd ts msg) = result
-        where topicBS                  = unparseTopics ts
-              messageBS                = unparseMessage msg
-              body                     = topicBS `BS.append` messageBS
-              zipping                  = BS.length body > 1000
-              cmdBS                    = unparseCommand cmd zipping
-              (compressedBody, zipped) = if zipping then compress body else (body, False)
-              result                   = if zipping
-              	                         then cmdBS `BS.append` (unparseLength $ BS.length compressedBody) `BS.append` compressedBody
-              	                         else cmdBS `BS.append` body
+        where topicBS             = unparseTopics ts
+              messageBS           = unparseMessage msg
+              body                = topicBS `BS.append` messageBS
+              zipping             = BS.length body > 1000
+              cmdBS               = unparseCommand cmd zipping
+              (compressedBody, _) = compress body
+              zippedBody          = unparseLength (BS.length compressedBody) `BS.append` compressedBody
+              result              = cmdBS `BS.append` (if zipping then zippedBody else body)
 
 
 byteStringToMessage :: LS.ByteString -> (NetMessage, LS.ByteString)
 byteStringToMessage ls = if zipped then zippedMessage else normalMessage
-        where mCmd@(Just cmd)   = parseCommand $ LS.head ls
+        where mCmd              = parseCommand $ LS.head ls
               (Flags zipped)    = parseFlags $ LS.head ls
               zippedMessage     = handleZippedMessage (LS.tail ls) mCmd
               normalMessage     = handleNormalMessage (LS.tail ls) mCmd
@@ -45,7 +44,7 @@ handleZippedMessage ls mCmd = (NetMessage cmd ts msg, rest)
               Just (lengthLength, compressedLength) = parseLength ls
               (decompressedBody, rest)              = decompressStream (LS.drop lengthLength ls) compressedLength
               (ts, topicRest)                       = extractTopics decompressedBody mCmd
-              (msg, messageRest)                    = extractMessage topicRest mCmd
+              (msg, _)                              = extractMessage topicRest mCmd
 
 
 containsTopics :: Maybe Command -> Bool

@@ -8,9 +8,11 @@ import qualified Data.ByteString.Char8 as B8
 import qualified Data.ByteString.UTF8  as UTF
 import qualified Data.Text             as Text
 import qualified Data.Text.Encoding    as TE
+import qualified Data.Text.IO          as Text
 
+import           P2P.Commands
+import qualified P2P.Messages          as M
 import qualified P2P.Networking        as Net
-import qualified P2P.Protocol          as P
 
 data Opts = Opts
     { opPort    :: Int
@@ -64,18 +66,20 @@ main = Net.withSocketsDo $ do
     Net.connectTo (opHost options) (opPort options) $ \serverHandle ->
         case opMessage options of
           Nothing  -> sendInteractive serverHandle
-          Just msg -> sendMsg serverHandle msg
+          Just msg -> sendMsg serverHandle $ Text.pack msg
 
 -- send message directly
-sendMsg :: Handle -> String -> IO ()
+sendMsg :: Handle -> Text.Text -> IO ()
 sendMsg handle msg = do
-    putStrLn msg
+    Text.putStrLn msg
     BS.hPut handle binary
-      where (binary, zipped) = P.unparseMessage $ Just (TE.decodeUtf8 $ UTF.fromString msg)
+    where binary = M.messageToByteString netMessage
+          netMessage = M.NetMessage Broadcast Nothing (Just msg)
 
 -- send from stdin
 sendInteractive :: Handle -> IO ()
 sendInteractive handle = do
-    line <- BS.hGetLine stdin
-    BS.hPut handle $ (\(binary, zipped) -> binary) $ P.unparseMessage $ Just (TE.decodeUtf8 line)
+    line <- Text.hGetLine stdin
+    let netMessage = M.NetMessage Broadcast Nothing (Just line)
+    BS.hPut handle $ M.messageToByteString netMessage
     sendInteractive handle

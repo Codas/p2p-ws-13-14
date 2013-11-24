@@ -70,9 +70,9 @@ data MessageInfo = MessageInfo
 
 instance Show MessageInfo where
     show (MessageInfo 0 ts )
-        | Set.null ts = "Empty message to " ++ show ts
+        | Set.null ts = "Empty message to " ++ show (Set.toList ts)
         | otherwise    = "Empty message to nobody"
-    show (MessageInfo s ts ) = "Message of size " ++ show s ++ " to " ++ show ts
+    show (MessageInfo s ts ) = "Message of size " ++ show s ++ " to " ++ show (Set.toList ts)
 
 data NetEvent = NetEvent NetEventType Client MessageInfo
               deriving ( Eq )

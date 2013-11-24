@@ -17,6 +17,7 @@ import           Data.Set             (Set)
 import qualified Data.Set             as Set
 import qualified Data.Text            as Text
 import qualified Data.Text.Encoding   as TE
+import qualified Data.Text.IO         as Text
 
 import           P2P.Commands
 import qualified P2P.Events           as Evt
@@ -173,7 +174,7 @@ handleMessage (topicB, pEvt, client) nMsg = case nMsg of
 
         -- TODO: Debugging only, remove when done...
         -- outputs current message to the console
-        BS.putStr $ TE.encodeUtf8 msg
+        Text.putStrLn msg
         return ()
     _ -> return ()
 
@@ -189,7 +190,7 @@ handleBroadcast (topicB, pEvt, client) nMsg = case M.message nMsg of
 
         -- TODO: Debugging only, remove when done...
         -- outputs current message to the console
-        BS.putStr $ TE.encodeUtf8 msg
+        Text.putStrLn msg
         return ()
 
 clientsToHandles :: Set Evt.Client -> Evt.Client -> [Handle]
