@@ -5,6 +5,8 @@ module P2P.GUI (
 import           Control.Concurrent          (forkIO)
 import           Control.Monad
 import           Data.List
+import           Data.Set                    (Set)
+import qualified Data.Set                    as Set
 
 import qualified Graphics.UI.Threepenny      as UI
 import           Graphics.UI.Threepenny.Core hiding (value)
@@ -24,10 +26,10 @@ instance Eq ClientStats where
 instance Show ClientStats where
   show (ClientStats client size) = show client ++ ", received bytes: " ++ show size
 
-init :: Evt.NetEventGetter -> IO ()
-init netEvent = do
+init :: Evt.NetEventGetter -> Behavior (Set Evt.ClientCon) -> IO ()
+init netEvent clientsB = do
     let static = "../wwwroot/"
-    (clientsB, bytesB) <- getNetBehavior netEvent
+    bytesB <- accumB 0 ( accMsgSize <$> netEvent Evt.Message )
 
     forkIO $ UI.startGUI UI.defaultConfig
       { UI.tpPort       = 10000
@@ -36,7 +38,7 @@ init netEvent = do
       } ( setupGUI clientsB bytesB )
     return ()
 
-setupGUI :: (Show a, Show a1) => Behavior [a] -> Behavior a1 -> Window -> UI ()
+setupGUI :: (Show a) => Behavior (Set Evt.ClientCon) -> Behavior a -> Window -> UI ()
 setupGUI clientsB bytesB window = void $ do
     (return window) # set title "Server Monitor"
     clientsView <- mkElement "pre" #. "clientsView"
@@ -53,47 +55,15 @@ setupGUI clientsB bytesB window = void $ do
     -- Update the clientView on changes to the current list of clients
     element clientsView # sink text ( concatClients <$> clientsB )
     element netStat # sink text ( show <$> bytesB )
-  where concatClients = concat . (\s -> intersperse "\n" s) . map show
+  where concatClients = concat . (\s -> intersperse "\n" s) . map show . Set.toList
 
 layout :: [UI Element] -> [UI Element]
 layout mainContent = [UI.div #. "container" #+ [
                          UI.div #. "col-md-12" #+ mainContent ]]
 
-getNetBehavior :: MonadIO m => Evt.NetEventGetter ->
-                  m (Behavior [ClientStats], Behavior Evt.MessageSize)
-getNetBehavior netEvent = do
-    -- clientsB keeps track of currently connected clients (as ClientStats)
-    clientsB <- accumB [] ( accClientStats <$> netEvent Evt.AnyEvent)
-    bytesB <- accumB 0 ( accMsgSize <$> netEvent Evt.Message )
-    return (clientsB, bytesB)
-
--- accumulates NetEvents to a list of the clients converted to strings
--- TODO: Do not accumulate in strings but rather the clients directly?
-accClients :: Evt.NetEvent -> [String] -> [String]
-accClients (Evt.NetEvent eType client _) cs =
-  case eType of
-    Evt.Disconnected -> Data.List.delete clientS cs
-    Evt.Connected    -> cs ++ [clientS]
-    _            -> cs
-  where clientS = show client
-
-accClientStats :: Evt.NetEvent -> [ClientStats] -> [ClientStats]
-accClientStats (Evt.NetEvent eType client info) cs =
-  case eType of
-    Evt.Disconnected -> Data.List.delete clientS cs
-    Evt.Connected    -> cs ++ [clientS]
-    Evt.Message      -> map incSize cs
-    Evt.Broadcast    -> map incSize cs
-    _                -> cs
-  where clientS = ClientStats clientAddr msgSize
-        incSize stat@(ClientStats c s) = if c == clientAddr
-                                         then ClientStats c $! s + msgSize
-                                         else stat
-        msgSize    = Evt.messageSize info
-        clientAddr = Evt.sockAddr client
-
 accMsgSize :: Evt.NetEvent -> Evt.MessageSize -> Evt.MessageSize
 accMsgSize (Evt.NetEvent eType _ info) size =
   case eType of
-    Evt.Message -> size + Evt.messageSize info
+    Evt.Message   -> size + Evt.mSize info
+    Evt.Broadcast -> size + Evt.mSize info
     _       -> size

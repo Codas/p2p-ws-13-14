@@ -94,23 +94,24 @@ main :: IO ()
 main = Net.withSocketsDo $ do
     options <- execParser opts
     (netEvent, pEvt) <- Evt.getEventBus
+    topicB  <- Evt.getTopicBehavior  netEvent
+    clientB <- Evt.getClientBehavior netEvent
 
-    initUIs netEvent options
+    initUIs netEvent clientB options
 
-    startServer options netEvent pEvt
+    startServer options netEvent pEvt topicB clientB
     -- _ <- forkIO $ connectToRelay options netEvent pEvt
 
     return ()
 
-startServer :: Opts -> Evt.NetEventGetter -> (Evt.NetEvent -> IO b) -> IO r
-startServer options netEvent pEvt = listen $ \(lSock, lAddr) -> do
-    let server     = Evt.Client lAddr Nothing
+startServer :: Opts -> Evt.NetEventGetter -> (Evt.NetEvent -> IO b)
+            -> Behavior (Set Evt.TopicClients) -> Behavior (Set Evt.ClientCon) -> IO r
+startServer options netEvent pEvt topicB clientB = listen $ \(lSock, lAddr) -> do
+    let server     = Evt.Client lAddr Nothing 0
         serverInfo = Evt.MessageInfo 0 Set.empty
-    topicB  <- getTopicBehavior  netEvent
-    clientB <- getClientBehavior netEvent
     _ <- pEvt $ Evt.NetEvent Evt.Ready server serverInfo
     forever . Net.acceptFork lSock $ \(rHandle, rAddr) -> do
-        let client = Evt.Client rAddr (Just rHandle)
+        let client = Evt.Client rAddr (Just rHandle) 0
         handleClient rHandle client topicB clientB pEvt
   where listen = Net.listen address port
         address = opAddress options
@@ -118,8 +119,8 @@ startServer options netEvent pEvt = listen $ \(lSock, lAddr) -> do
 
 
 -- Read content from socket handle, display it and notify system of events
-handleClient :: Handle -> Evt.Client -> Behavior (Set TopicClients)
-             -> Behavior (Set ClientCon) -> (Evt.NetEvent -> IO b) -> IO ()
+handleClient :: Handle -> Evt.Client -> Behavior (Set Evt.TopicClients)
+             -> Behavior (Set Evt.ClientCon) -> (Evt.NetEvent -> IO b) -> IO ()
 handleClient handle client topicB clientB pushEvent = do
     let clientInfo = Evt.MessageInfo 0 Set.empty
     _ <- pushEvent $ Evt.NetEvent Evt.Connected client clientInfo
@@ -134,12 +135,11 @@ connectToRelay options netEvent pEvt = case opRelay options of
     Nothing    -> return ()
     Just rAddr -> undefined
 
-
 -----------------------------------
 -- Protocol and client handling. --
 -----------------------------------
 
-type EventTuple b = (Behavior (Set TopicClients), Behavior (Set ClientCon)
+type EventTuple b = (Behavior (Set Evt.TopicClients), Behavior (Set Evt.ClientCon)
                     , Evt.NetEvent -> IO b, Evt.Client)
 
 handleProtocol :: EventTuple b -> LS.ByteString -> IO ()
@@ -161,13 +161,10 @@ handleJoin (topicB, _, pEvt, client) nMsg = case M.topics nMsg of
     Nothing -> return ()
     Just ts -> do
         currentTs <- currentValue topicB
-        let newTopics = ts Set.\\ Set.map _topic currentTs
+        let newTopics = ts Set.\\ Set.map Evt._topic currentTs
             i         = Evt.MessageInfo 0 ts
         _ <- pEvt $ Evt.NetEvent Evt.FirstJoin client (Evt.MessageInfo 0 newTopics)
         _ <- pEvt $ Evt.NetEvent Evt.Join client i
-
-        currentTs' <- currentValue topicB
-        print currentTs'
         return ()
 
 handlePart :: EventTuple b -> M.NetMessage -> IO ()
@@ -175,13 +172,11 @@ handlePart (topicB, _, pEvt, client) nMsg = case M.topics nMsg of
     Nothing -> return ()
     Just ts -> do
         currentTs <- currentValue topicB
-        let legTopics = Set.map _topic $ Set.filter (\tc -> _clients tc == cSet) currentTs
+        let legTopics = Set.map Evt._topic $ Set.filter (\tc -> Evt._clients tc == cSet) currentTs
             i         = Evt.MessageInfo 0 ts
             cSet = Set.singleton client
         _ <- pEvt $ Evt.NetEvent Evt.LastPart client (Evt.MessageInfo 0 legTopics)
         _ <- pEvt $ Evt.NetEvent Evt.Part client i
-        currentTs' <- currentValue topicB
-        print currentTs'
         return ()
 
 handleMessage :: EventTuple b -> M.NetMessage -> IO ()
@@ -190,7 +185,7 @@ handleMessage (topicB, _, pEvt, client) nMsg = case nMsg of
         currentTs <- currentValue topicB
         let i       = Evt.MessageInfo (Text.length msg) ts
             binMsg  = M.messageToByteString nMsg
-            subTs   = Set.filter (\tc -> Set.member (_topic tc) ts) currentTs
+            subTs   = Set.filter (\tc -> Set.member (Evt._topic tc) ts) currentTs
         _ <- pEvt $ Evt.NetEvent Evt.Message client i
 
         forClientHandles subTs client $ \h -> BS.hPut h binMsg >> hFlush h
@@ -208,7 +203,7 @@ handleBroadcast (_, clientB, pEvt, client) nMsg = case M.message nMsg of
         currentCs <- currentValue clientB
         let i          = Evt.MessageInfo (Text.length msg) Set.empty
             binMsg     = M.messageToByteString nMsg
-            cs = mapMaybe (Evt.clientHandle . _client ) $ Set.toList currentCs
+            cs = mapMaybe (Evt.clientHandle . Evt._client ) $ Set.toList currentCs
         _ <- pEvt $ Evt.NetEvent Evt.Broadcast client i
         forM_ cs $ \h -> BS.hPut h binMsg >> hFlush h
 
@@ -223,96 +218,22 @@ clientsToHandles cs c = mapMaybe Evt.clientHandle noCBClient
 
 -- concurrently execute function for all client handles in the topicClients set.
 -- Exclude single client from the set.
-forClientHandles :: Set TopicClients -> Evt.Client -> (Handle -> IO ()) -> IO ()
+forClientHandles :: Set Evt.TopicClients -> Evt.Client -> (Handle -> IO ()) -> IO ()
 forClientHandles tcs c fn = (forM_ handles $ forkIO . fn) >> print handles
-  where cs = Set.foldr (Set.union . _clients) Set.empty tcs
+  where cs = Set.foldr (Set.union . Evt._clients) Set.empty tcs
         handles = clientsToHandles cs c
 
 --------------------------
 -- Events and behaviors --
 --------------------------
 
-data ClientCon = ClientCon
-                  { _client :: Evt.Client
-                  , _topics :: Set Topic}
-                  deriving (Show)
-
-instance Eq ClientCon where
-    (ClientCon c _)  == (ClientCon c1 _) = c == c1
-
-instance Ord ClientCon where
-    compare (ClientCon c _) (ClientCon c1 _) = compare c c1
-
-topics :: Lens' ClientCon (Set Topic)
-topics = lens _topics (\clientCon t -> clientCon { _topics = t })
-
-data TopicClients = TopicClients
-                  { _topic   :: Topic
-                  , _clients :: Set Evt.Client}
-                  deriving (Show)
-
-instance Eq TopicClients where
-    (TopicClients t _)  == (TopicClients t1 _) = t == t1
-
-instance Ord TopicClients where
-    compare (TopicClients t _) (TopicClients t1 _) = compare t t1
-
-clients :: Lens' TopicClients (Set Evt.Client)
-clients = lens _clients (\topicClient t -> topicClient { _clients = t })
-
-getClientBehavior :: Evt.NetEventGetter -> IO (Behavior (Set ClientCon))
-getClientBehavior evt = accumB Set.empty ( accClientCon <$> evt Evt.AnyEvent)
-
-getTopicBehavior :: Evt.NetEventGetter -> IO (Behavior (Set TopicClients))
-getTopicBehavior evt = accumB Set.empty ( accTopicClients <$> evt Evt.AnyEvent)
-
-accClientCon :: Evt.NetEvent -> Set ClientCon -> Set ClientCon
-accClientCon (Evt.NetEvent eType c i) cns =
-  case eType of
-    Evt.Disconnected -> Set.delete client cns
-    Evt.Connected    -> Set.insert client cns
-    Evt.Join         -> Set.map (modTopics $ Set.union ets) cns
-    Evt.Part         -> Set.map (modTopics (Set.\\ ets)) cns
-    _                -> cns
-  where ets     = Evt.topics i
-        client = ClientCon c ets
-        modTopics :: (Set Topic -> Set Topic) -> ClientCon -> ClientCon
-        modTopics f cn
-            | c == _client cn = over topics f cn
-            | otherwise = cn
-
-accTopicClients :: Evt.NetEvent -> Set TopicClients -> Set TopicClients
-accTopicClients (Evt.NetEvent eType c i) tcs =
-  case eType of
-    Evt.Join         -> Set.map (modClients $ Set.insert c) addedTopics
-    Evt.Part         -> cleanup $ Set.map (modClients (Set.delete c)) tcs
-    Evt.Disconnected -> cleanup $ Set.map (over clients (Set.delete c)) tcs
-    _                -> tcs
-  where ets         = Evt.topics i
-        etc         = Set.map (`TopicClients` Set.empty) ets
-        addedTopics = Set.union tcs etc
-        cleanup     = Set.filter (\(TopicClients _ cs)  -> not $ Set.null cs)
-        modClients :: (Set Evt.Client -> Set Evt.Client) -> TopicClients -> TopicClients
-        modClients f tc | trace ("searched: " ++ show (_clients tc) ++ " client: " ++ show c) False = undefined
-        modClients f tc
-            | Set.member (_topic tc) ets = over clients f tc
-            | otherwise = tc
-
-accTopics :: Evt.NetEvent -> Set Topic -> Set Topic
-accTopics (Evt.NetEvent eType c i) ts =
-  case eType of
-    Evt.Join         -> Set.union ts ets
-    Evt.Part         -> ts Set.\\ ets
-    _                -> ts
-  where ets = Evt.topics i
-
 -------------------------------
 -- General UI initialization --
 -------------------------------
-initUIs :: Evt.NetEventGetter -> Opts -> IO ()
-initUIs netEvent options = do
-    when ( opGui options ) $ GUI.init netEvent        -- init web GUI
-    when (opConsole options) $ initConsoleUI netEvent -- init console gui
+initUIs :: Evt.NetEventGetter -> Behavior (Set Evt.ClientCon) -> Opts -> IO ()
+initUIs netEvent clientB options = do
+    when ( opGui options ) $ GUI.init netEvent clientB -- init web GUI
+    when (opConsole options) $ initConsoleUI netEvent  -- init console gui
 
 ----------------
 -- Console UI --
