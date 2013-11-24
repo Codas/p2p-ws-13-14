@@ -1,10 +1,16 @@
 # Protocol definition
 
-**Basics**:
+**Basics - Ohne Kompression**:
 
 | 1 Byte       | 1 - 8 Bytes     | 1+ Bytes | 1 - 8 Bytes      | 1+ Bytes |
 | :----------: | :-------------: | :------: | :--------------: | :------: |
 | Code & Flags | Topic(s) Length | Topic(s) | Message Length   | Message  |
+
+**Basics - Mit Kompression**:
+
+| 1 Byte       | 1 - 8 Bytes       | 1 - 8 Bytes     | 1+ Bytes | 1 - 8 Bytes      | 1+ Bytes |
+| :----------: | :---------------: | :-------------: | :------: | :--------------: | :------: |
+| Code & Flags | Compressed Length | Topic(s) Length | Topic(s) | Message Length   | Message  |
 
 **Additional Fields**:
 
