@@ -16,8 +16,8 @@ func CompressMessage(msg []byte) (cMsg []byte, compressed bool) {
 }
 
 func DecompressMessage(msg []byte) (dMsg []byte) {
-	osize := len(msg) * 4 // guess length ?
-	dMsg = make([]byte, osize)
-	length := lz4.Decompress(msg, dMsg, osize)
+	oSize := len(msg) * 4 // guess length ?
+	dMsg = make([]byte, oSize)
+	length := lz4.DecompressUnknownOutputSize(msg, dMsg, len(msg), oSize)
 	return dMsg[:length]
 }
