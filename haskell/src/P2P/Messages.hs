@@ -4,14 +4,14 @@ import qualified Data.ByteString      as BS
 import qualified Data.ByteString.Lazy as LS
 import qualified Data.Text            as T
 import           P2P.Commands
-import           P2P.Protocol
 import           P2P.Compression
+import           P2P.Protocol
 
-data NetMessage = NetMessage {
-	command :: Command,
-	topics  :: Maybe Topics,
-	message :: Maybe Message
-} deriving (Show)
+data NetMessage = NetMessage
+                  { command     :: Command
+                  , topics      :: Maybe Topics
+	              , message     :: Maybe Message }
+                  deriving (Show)
 
 messageToByteString :: NetMessage -> BS.ByteString
 messageToByteString (NetMessage cmd topics message) = result
@@ -19,12 +19,12 @@ messageToByteString (NetMessage cmd topics message) = result
               messageBS                = unparseMessage message
               body                     = topicBS `BS.append` messageBS
               zipping                  = BS.length body > 1000
-              cmdBS                    = unparseCommand cmd zipping 
+              cmdBS                    = unparseCommand cmd zipping
               (compressedBody, zipped) = if zipping then compress body else (body, False)
-              result                   = if zipping 
-              	                          then cmdBS `BS.append` (unparseLength $ BS.length compressedBody) `BS.append` compressedBody
-              	                          else cmdBS `BS.append` body
-           
+              result                   = if zipping
+              	                         then cmdBS `BS.append` (unparseLength $ BS.length compressedBody) `BS.append` compressedBody
+              	                         else cmdBS `BS.append` body
+
 
 byteStringToMessage :: LS.ByteString -> (NetMessage, LS.ByteString)
 byteStringToMessage ls = if zipped then handleZippedMessage (LS.tail ls) mCmd else handleNormalMessage (LS.tail ls) mCmd
@@ -48,7 +48,7 @@ handleZippedMessage ls command = (NetMessage cmd topics message, rest)
 
 containsTopics :: Maybe Command -> Bool
 containsTopics Nothing = False
-containsTopics (Just cmd) = case cmd of 
+containsTopics (Just cmd) = case cmd of
 	Join          -> True
 	Part          -> True
 	ReceiveTopics -> True
@@ -59,7 +59,7 @@ containsTopics (Just cmd) = case cmd of
 
 containsMessage :: Maybe Command -> Bool
 containsMessage Nothing = False
-containsMessage (Just cmd) = case cmd of 
+containsMessage (Just cmd) = case cmd of
 	Message       -> True
 	Binary        -> True
 	Broadcast     -> True
