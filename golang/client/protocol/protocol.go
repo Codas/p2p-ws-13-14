@@ -141,7 +141,10 @@ func (c *Connection) writeFlags(actionFlag Flags, compressed bool) error {
 }
 
 func (c *Connection) writeTopics(topics []string) error {
-	length := uint64(len(topics) - 1)
+	var length uint64
+	if len(topics) > 1 {
+		length = uint64(len(topics) - 1)
+	}
 	for _, t := range topics {
 		length += uint64(len(t))
 	}
