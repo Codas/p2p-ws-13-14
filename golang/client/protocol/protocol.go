@@ -2,10 +2,12 @@ package protocol
 
 import (
 	"bufio"
+	"bytes"
 	"io"
 )
 
 type Connection struct {
+	b bytes.Buffer
 	r *bufio.Reader
 	w *bufio.Writer
 	c io.Closer
@@ -49,7 +51,7 @@ func (c *Connection) encodeLength(length uint64) error {
 		if i == 0 {
 			b |= byte((numbytes - 1) << 5)
 		}
-		if err := c.w.WriteByte(b); err != nil {
+		if err := c.b.WriteByte(b); err != nil {
 			return err
 		}
 	}
@@ -80,56 +82,59 @@ func (c *Connection) decodeLength() (length uint64, err error) {
 	return
 }
 
-func (c *Connection) WriteJoinTopics(topics []string) error {
-	if err := c.writeFlags(FlagJoin, false); err != nil {
+func (c *Connection) compressMessage() (data []byte, compressed bool) {
+	data = c.b.Bytes()
+	data, compressed = CompressMessage(data)
+	c.b.Reset()
+	return
+}
+
+func (c *Connection) writeAll(flag Flags) error {
+	data, compressed := c.compressMessage()
+	if err := c.writeFlags(FlagJoin, compressed); err != nil {
 		return err
 	}
-	if err := c.writeTopics(topics); err != nil {
-		return err
+	if len(data) > 0 {
+		if _, err := c.w.Write(data); err != nil {
+			return err
+		}
 	}
 	return c.w.Flush()
+}
+
+func (c *Connection) WriteJoinTopics(topics []string) error {
+	if err := c.bufferTopics(topics); err != nil {
+		return err
+	}
+	return c.writeAll(FlagJoin)
 }
 
 func (c *Connection) WritePartTopics(topics []string) error {
-	if err := c.writeFlags(FlagPart, false); err != nil {
+	if err := c.bufferTopics(topics); err != nil {
 		return err
 	}
-	if err := c.writeTopics(topics); err != nil {
-		return err
-	}
-	return c.w.Flush()
+	return c.writeAll(FlagPart)
 }
 
 func (c *Connection) WriteBroadCast(message string) error {
-	msg, compressed := CompressMessage([]byte(message))
-	if err := c.writeFlags(FlagBroadCast, compressed); err != nil {
+	if err := c.bufferMessage([]byte(message)); err != nil {
 		return err
 	}
-	if err := c.writeMessage(msg); err != nil {
-		return err
-	}
-	return c.w.Flush()
+	return c.writeAll(FlagBroadCast)
 }
 
 func (c *Connection) WriteMessage(topics []string, message string) error {
-	msg, compressed := CompressMessage([]byte(message))
-	if err := c.writeFlags(FlagMessage, compressed); err != nil {
+	if err := c.bufferTopics(topics); err != nil {
 		return err
 	}
-	if err := c.writeTopics(topics); err != nil {
+	if err := c.bufferMessage([]byte(message)); err != nil {
 		return err
 	}
-	if err := c.writeMessage(msg); err != nil {
-		return err
-	}
-	return c.w.Flush()
+	return c.writeAll(FlagMessage)
 }
 
 func (c *Connection) WriteAskTopics() error {
-	if err := c.writeFlags(FlagTopicAsk, false); err != nil {
-		return err
-	}
-	return c.w.Flush()
+	return c.writeAll(FlagTopicAsk)
 }
 
 func (c *Connection) writeFlags(actionFlag Flags, compressed bool) error {
@@ -137,10 +142,10 @@ func (c *Connection) writeFlags(actionFlag Flags, compressed bool) error {
 	if compressed {
 		code |= MaskZip
 	}
-	return c.w.WriteByte(code)
+	return c.b.WriteByte(code)
 }
 
-func (c *Connection) writeTopics(topics []string) error {
+func (c *Connection) bufferTopics(topics []string) error {
 	var length uint64
 	if len(topics) > 1 {
 		length = uint64(len(topics) - 1)
@@ -152,11 +157,11 @@ func (c *Connection) writeTopics(topics []string) error {
 		return err
 	}
 	for i, t := range topics {
-		if _, err := c.w.WriteString(t); err != nil {
+		if _, err := c.b.WriteString(t); err != nil {
 			return err
 		}
 		if i < len(topics)-1 {
-			if err := c.w.WriteByte(0); err != nil {
+			if err := c.b.WriteByte(0); err != nil {
 				return err
 			}
 		}
@@ -164,12 +169,12 @@ func (c *Connection) writeTopics(topics []string) error {
 	return nil
 }
 
-func (c *Connection) writeMessage(msg []byte) error {
+func (c *Connection) bufferMessage(msg []byte) error {
 	length := len(msg)
 	if err := c.encodeLength(uint64(length)); err != nil {
 		return err
 	}
-	if _, err := c.w.Write(msg); err != nil {
+	if _, err := c.b.Write(msg); err != nil {
 		return err
 	}
 	return nil
