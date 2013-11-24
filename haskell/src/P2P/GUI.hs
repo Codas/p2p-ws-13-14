@@ -83,6 +83,7 @@ accClientStats (Evt.NetEvent eType client info) cs =
     Evt.Disconnected -> Data.List.delete clientS cs
     Evt.Connected    -> cs ++ [clientS]
     Evt.Message      -> map incSize cs
+    Evt.Broadcast    -> map incSize cs
     _                -> cs
   where clientS = ClientStats clientAddr msgSize
         incSize stat@(ClientStats c s) = if c == clientAddr
