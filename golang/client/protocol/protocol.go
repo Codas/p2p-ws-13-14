@@ -202,6 +202,9 @@ func (c *Connection) readTopics() (topics []string, err error) {
 	if err != nil {
 		return nil, err
 	}
+	if len(data) == 0 {
+		return nil, nil
+	}
 	laststart := 0
 	for i, b := range data {
 		if b == 0 {
@@ -217,6 +220,9 @@ func (c *Connection) readMessage(compressed bool) (msg []byte, err error) {
 	length, err := c.decodeLength()
 	if err != nil {
 		return nil, err
+	}
+	if length == 0 {
+		return nil, nil
 	}
 	msg = make([]byte, length)
 	if _, err = c.r.Read(msg); err != nil {
