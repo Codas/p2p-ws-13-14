@@ -24,4 +24,5 @@ data Command = Join
              | Delete
              | Kick
              | Statistics
+             | Relay
              deriving ( Show )

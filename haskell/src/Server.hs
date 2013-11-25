@@ -18,6 +18,8 @@ import qualified Data.Set             as Set
 import qualified Data.Text            as Text
 import qualified Data.Text.Encoding   as TE
 import qualified Data.Text.IO         as Text
+import           Data.Word
+import qualified Text.Read            as R
 
 import           P2P.Commands
 import qualified P2P.Events           as Evt
@@ -32,9 +34,10 @@ import qualified P2P.Protocol         as P
 data Opts = Opts
   { opPort    :: String
   , opAddress :: Net.HostPreference
-  , opRelay   :: Maybe String
+  , opRelay   :: Maybe (Net.HostName, Int)
   , opConsole :: Bool
-  , opGui     :: Bool }
+  , opGui     :: Bool
+  , opGuiPort :: Int}
   deriving Show
 
 -- define possible command line arguments. Call this programm with --help
@@ -61,7 +64,7 @@ serverOpts = Opts
         <> short 'r'
         <> value Nothing
         <> metavar "RELAY"
-        <> reader auto
+        <> reader relayReader
         <> showDefault
         <> help "Relay to connect to.")
      <*> switch
@@ -72,10 +75,23 @@ serverOpts = Opts
          ( long "gui"
         <> short 'g'
         <> help "Enable web based graphical user interface. Binds do port 10000." )
+     <*> nullOption
+         ( long "gport"
+        <> value 10000
+        <> metavar "GUIPORT"
+        <> reader auto
+        <> showDefault
+        <> help "GUI Port.")
 
 -- custom reader to parse the host preferencec
 hostReader :: Monad m => String -> m Net.HostPreference
 hostReader s = return $ Net.Host s
+
+relayReader :: Monad m => String -> m ( Maybe ( Net.HostName, Int ))
+relayReader s = case R.readMaybe (tail i) :: (Maybe Int) of
+    Just int -> return $ Just (string, int)
+    _        -> return Nothing
+  where (string, i) = break (== ':') s
 
 -- build the command line options, including helper text and parser
 opts :: ParserInfo Opts
@@ -94,9 +110,12 @@ main = Net.withSocketsDo $ do
     (netEvent, pEvt) <- Evt.getEventBus
     topicB  <- Evt.getTopicBehavior  netEvent
     clientB <- Evt.getClientBehavior netEvent
+    joins <- stepper undefined (netEvent Evt.AnyEvent)
 
     initUIs netEvent clientB options
 
+    forkIO $ connectToRelay options topicB clientB pEvt
+    forkIO $ handleRelays clientB joins
     startServer options netEvent pEvt topicB clientB
     -- _ <- forkIO $ connectToRelay options netEvent pEvt
 
@@ -105,33 +124,88 @@ main = Net.withSocketsDo $ do
 startServer :: Opts -> Evt.NetEventGetter -> (Evt.NetEvent -> IO b)
             -> Behavior (Set Evt.TopicClients) -> Behavior (Set Evt.ClientCon) -> IO r
 startServer options netEvent pEvt topicB clientB = listen $ \(lSock, lAddr) -> do
-    let server     = Evt.Client lAddr Nothing 0
+    let server     = Evt.Client lAddr Nothing True 0
         serverInfo = Evt.MessageInfo 0 Set.empty
     _ <- pEvt $ Evt.NetEvent Evt.Ready server serverInfo
     forever . Net.acceptFork lSock $ \(rHandle, rAddr) -> do
-        let client = Evt.Client rAddr (Just rHandle) 0
+        let client = Evt.Client rAddr (Just rHandle) False 0
         handleClient rHandle client topicB clientB pEvt
   where listen = Net.listen address port
         address = opAddress options
         port    = opPort options
-
 
 -- Read content from socket handle, display it and notify system of events
 handleClient :: Handle -> Evt.Client -> Behavior (Set Evt.TopicClients)
              -> Behavior (Set Evt.ClientCon) -> (Evt.NetEvent -> IO b) -> IO ()
 handleClient handle client topicB clientB pushEvent = do
     let clientInfo = Evt.MessageInfo 0 Set.empty
-    _ <- pushEvent $ Evt.NetEvent Evt.Connected client clientInfo
     clientStream <- LS.hGetContents handle
-    let eventTuple = (topicB, clientB, pushEvent, client)
+    let cor        = if isRelay then relay else client
+        eventTuple = (topicB, clientB, pushEvent, cor)
+        streamHead = LS.take 1 clientStream
+        relayBS    = LS.singleton (248::Word8) -- TODO: Remove magic number
+        relay      = L.set Evt.isRelayL True client
+        isRelay    = streamHead == relayBS
+
+    when isRelay $ do
+        currentTs <- currentValue topicB
+        let binTopics  = M.messageToByteString (M.NetMessage Join (Just topics) Nothing)
+            topics     = Set.map Evt._topic currentTs
+        unless (Set.null topics) $ BS.hPut handle binTopics >> hFlush handle
+
+    _ <- pushEvent $ Evt.NetEvent Evt.Connected cor clientInfo
     handleProtocol eventTuple clientStream
     _ <- pushEvent $ Evt.NetEvent Evt.Disconnected client clientInfo
     return ()
 
-connectToRelay :: Opts -> Evt.NetEventGetter -> (Evt.NetEvent -> IO b) -> IO ()
-connectToRelay options netEvent pEvt = case opRelay options of
+connectToRelay :: Opts -> Behavior (Set Evt.TopicClients)
+               -> Behavior (Set Evt.ClientCon) -> (Evt.NetEvent -> IO b) -> IO ()
+connectToRelay options topicB clientB pEvt = case opRelay options of
     Nothing    -> return ()
-    Just rAddr -> undefined
+    Just (host, port) ->
+        Net.connectTo host port $ \(handle, rAddr) -> do
+            currentTs <- currentValue topicB
+            let relay      = Evt.Client rAddr (Just handle) True 0
+                relayInfo  = Evt.MessageInfo 0 Set.empty
+                eventTuple = (topicB, clientB, pEvt, relay)
+                topics     = Set.map Evt._topic currentTs
+                binRelay   = M.messageToByteString (M.NetMessage Relay Nothing Nothing)
+                binTopics  = M.messageToByteString (M.NetMessage Join (Just topics) Nothing)
+
+            BS.hPut handle binRelay
+            unless (Set.null topics) $ BS.hPut handle binTopics
+            hFlush handle
+
+            pEvt $ Evt.NetEvent Evt.Connected relay relayInfo
+            clientStream <- LS.hGetContents handle
+            handleProtocol eventTuple clientStream
+            pEvt $ Evt.NetEvent Evt.Disconnected relay relayInfo
+            return ()
+
+handleRelays :: Behavior (Set Evt.ClientCon) -> Behavior Evt.NetEvent -> IO ()
+handleRelays clientB joins =
+    onChange joins $ \(Evt.NetEvent eType client (Evt.MessageInfo _ ts)) ->
+        case eType of
+            Evt.FirstJoin -> do
+                currentRs <- currentValue clientB
+                let nMsg   = M.NetMessage Join (Just ts) Nothing
+                    subRs  = targetedRelays client currentRs
+                putStrLn "---------------------------------"
+                print subRs
+                writeToAllR subRs nMsg
+                putStrLn "---------------------------------"
+                return ()
+            Evt.LastPart -> do
+                currentRs <- currentValue clientB
+                let nMsg   = M.NetMessage Part (Just ts) Nothing
+                    subRs  = targetedRelays client currentRs
+                putStrLn "---------------------------------"
+                print subRs
+                writeToAllR subRs nMsg
+                putStrLn "---------------------------------"
+                return ()
+            _ -> return ()
+    -- handleRelayEvents netEvent handle client pEvt
 
 -----------------------------------
 -- Protocol and client handling. --
@@ -144,24 +218,26 @@ handleProtocol :: EventTuple b -> LS.ByteString -> IO ()
 handleProtocol evtTuple bs
     | LS.null bs   = return ()
     | otherwise = do
-      let (nMsg, rest) = M.byteStringToMessage bs
-      case M.command nMsg of
-          Join      -> handleJoin      evtTuple nMsg
-          Part      -> handlePart      evtTuple nMsg
-          Message   -> handleMessage   evtTuple nMsg
-          Broadcast -> handleBroadcast evtTuple nMsg
-          AskTopics -> handleBroadcast evtTuple nMsg
-          _         -> return ()
-      handleProtocol evtTuple rest
+        let (nMsg, rest) = M.byteStringToMessage bs
+        case M.command nMsg of
+            Join      -> handleJoin      evtTuple nMsg
+            Part      -> handlePart      evtTuple nMsg
+            Message   -> handleMessage   evtTuple nMsg
+            Broadcast -> handleBroadcast evtTuple nMsg
+            AskTopics -> handleTopicReq  evtTuple nMsg
+            _         -> return ()
+        handleProtocol evtTuple rest
 
 -- client handling
 handleJoin :: EventTuple b -> M.NetMessage -> IO ()
-handleJoin (topicB, _, pEvt, client) nMsg = case M.topics nMsg of
+handleJoin (_, clientB, pEvt, client) nMsg = case M.topics nMsg of
     Nothing -> return ()
     Just ts -> do
-        currentTs <- currentValue topicB
-        let newTopics = ts Set.\\ Set.map Evt._topic currentTs
-            i         = Evt.MessageInfo 0 ts
+        currentCs <- currentValue clientB
+        let newTopics    = ts Set.\\ Set.foldr Set.union Set.empty topicsSet
+            topicsSet    = Set.map Evt._topics clientTopics
+            clientTopics = Set.filter (\cn -> not (Evt.isRelay (Evt._client cn))) currentCs
+            i            = Evt.MessageInfo 0 ts
         _ <- pEvt $ Evt.NetEvent Evt.FirstJoin client (Evt.MessageInfo 0 newTopics)
         _ <- pEvt $ Evt.NetEvent Evt.Join client i
         return ()
@@ -186,10 +262,6 @@ handleMessage (_, clientB, pEvt, client) nMsg = case nMsg of
             subCs        = targetedClients ts client currentCs
         _ <- pEvt $ Evt.NetEvent Evt.Message client i
         writeToAllC subCs nMsg
-
-        -- TODO: Debugging only, remove when done...
-        -- outputs current message to the console
-        Text.putStrLn msg
         return ()
     _ -> return ()
 
@@ -199,36 +271,34 @@ handleBroadcast (_, clientB, pEvt, client) nMsg = case M.message nMsg of
     Just msg -> do
         currentCs <- currentValue clientB
         let i = Evt.MessageInfo (Text.length msg) Set.empty
+            subscribedClients = filterClient client currentCs
         _ <- pEvt $ Evt.NetEvent Evt.Broadcast client i
-        writeToAllC currentCs nMsg
-
-        -- TODO: Debugging only, remove when done...
-        -- outputs current message to the console
-        Text.putStrLn msg
+        writeToAllC subscribedClients nMsg
         return ()
 
 handleTopicReq :: EventTuple b -> M.NetMessage -> IO ()
-handleTopicReq (topicB, _, pEvt, client) nMsg = case M.message nMsg of
-    Nothing  -> return ()
-    Just msg -> do
-        currentTs <- currentValue topicB
-        let topics     = Set.map Evt._topic currentTs
-            i          = Evt.MessageInfo 0 topics
-            binMsg     = M.messageToByteString (M.NetMessage ReceiveTopics (Just topics) Nothing)
-            (Just c)   = Evt.clientHandle client
-        _ <- pEvt $ Evt.NetEvent Evt.Broadcast client i
-        BS.hPut c binMsg >> hFlush c
+handleTopicReq (topicB, _, pEvt, client) _ = do
+    currentTs <- currentValue topicB
+    let topics     = Set.map Evt._topic currentTs
+        i          = Evt.MessageInfo 0 topics
+        binMsg     = M.messageToByteString (M.NetMessage ReceiveTopics (Just topics) Nothing)
+        c          = maybeToList $ Evt.clientHandle client
+    _ <- pEvt $ Evt.NetEvent Evt.AskClient client i
 
-        -- TODO: Debugging only, remove when done...
-        -- outputs current message to the console
-        Text.putStrLn msg
-        Text.putStrLn $ Text.pack $ show binMsg
-        return ()
+    forM_ c $ \c' -> BS.hPut c' binMsg >> hFlush c'
+    return ()
 
 writeToAllC :: Set Evt.ClientCon -> M.NetMessage -> IO ()
 writeToAllC cs nMsg = forM_ (Set.toList cs) $ \cn -> do
     let h      = fromJust $ Evt.clientHandle (Evt._client cn)
         binMsg = sanitizedBinaryMessage nMsg cn
+    BS.hPut h binMsg
+    hFlush h
+
+writeToAllR :: Set Evt.ClientCon -> M.NetMessage -> IO ()
+writeToAllR cs nMsg = forM_ (Set.toList cs) $ \cn -> do
+    let h      = fromJust $ Evt.clientHandle (Evt._client cn)
+        binMsg = M.messageToByteString nMsg
     BS.hPut h binMsg
     hFlush h
 
@@ -243,6 +313,12 @@ sanitizedBinaryMessage nMsg cn = M.messageToByteString sMsg
    where sMsg = L.over M.topicsL (fmap (Set.intersection ts)) nMsg
          ts   = Evt._topics cn
 
+filterClient c = Set.filter (\cn -> Evt._client cn /= c)
+
+targetedRelays :: Evt.Client -> Set Evt.ClientCon -> Set Evt.ClientCon
+targetedRelays c = Set.filter keep
+    where keep cn = hasHandle cn && Evt._client cn /= c && Evt.isRelay (Evt._client cn)
+
 targetedClients :: Topics -> Evt.Client -> Set Evt.ClientCon -> Set Evt.ClientCon
 targetedClients ts c = Set.filter keep
     where keep cn = hasTopics ts cn && hasHandle cn && Evt._client cn /= c
@@ -252,8 +328,8 @@ targetedClients ts c = Set.filter keep
 -------------------------------
 initUIs :: Evt.NetEventGetter -> Behavior (Set Evt.ClientCon) -> Opts -> IO ()
 initUIs netEvent clientB options = do
-    when ( opGui options ) $ GUI.init netEvent clientB -- init web GUI
-    when (opConsole options) $ initConsoleUI netEvent  -- init console gui
+    when ( opGui options ) $ GUI.init (opGuiPort options) netEvent clientB
+    when (opConsole options) $ initConsoleUI netEvent
 
 ----------------
 -- Console UI --

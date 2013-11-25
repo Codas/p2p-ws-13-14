@@ -8,9 +8,9 @@ import           Data.Int
 import           Data.List
 import           Data.Set             (Set)
 import qualified Data.Set             as Set
+import qualified Data.Text            as T
 import qualified Data.Text.Encoding   as TE
 import qualified Data.Word            as W
-import qualified Data.Text            as T
 import           Numeric
 
 import           P2P.Commands
@@ -27,7 +27,9 @@ parseTopics bs = case parseBinary bs of
 
 unparseTopics :: Maybe Topics -> BS.ByteString
 unparseTopics Nothing = BS.empty
-unparseTopics (Just topics) = lengthBS `BS.append` topicBS
+unparseTopics (Just topics)
+      | Set.null topics = BS.empty
+      | otherwise        = lengthBS `BS.append` topicBS
     where nullByte = BS.singleton (0 :: W.Word8)
           topicBS  = BS.concat $ intersperse nullByte (map TE.encodeUtf8 $ Set.toList topics)
           lengthBS = unparseLength $ BS.length topicBS
@@ -78,6 +80,7 @@ parseCommand byte = command
               (1:0:0:0:1:_) -> Just Delete
               (1:0:0:1:0:_) -> Just Kick
               (1:0:1:0:0:_) -> Just Statistics
+              (1:1:1:1:1:_) -> Just Relay
               _             -> Nothing
 
 unparseCommand :: Command -> Bool -> BS.ByteString
@@ -94,6 +97,7 @@ unparseCommand command z =
         Delete         -> createCommandByteString 17 z
         Kick           -> createCommandByteString 18 z
         Statistics     -> createCommandByteString 20 z
+        Relay          -> createCommandByteString 31 False
 
 
 parseFlags :: W.Word8 -> Flags
@@ -149,9 +153,9 @@ countBits i = length $ showIntAtBase 2 intToDigit i ""
 
 intToWords :: Int -> [W.Word8]
 intToWords i = if i == 0 then []
-               else intToWords (i `div`256) ++ [fromIntegral i  :: W.Word8]
+               else intToWords (i `div` 256) ++ [fromIntegral i :: W.Word8]
 
 createCommandByteString :: Int -> Bool -> BS.ByteString
-createCommandByteString cmdNum zipEnabled = BS.pack $ intToWords finalCmdValue
+createCommandByteString cmdNum zipEnabled = BS.pack [fromIntegral finalCmdValue :: W.Word8]
     where addZipping = if zipEnabled then 1 else 0
           finalCmdValue = (cmdNum * 2 + addZipping) * 4

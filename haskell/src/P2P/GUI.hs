@@ -28,13 +28,13 @@ instance Eq ClientStats where
 instance Show ClientStats where
   show (ClientStats client size) = show client ++ ", received bytes: " ++ show size
 
-init :: Evt.NetEventGetter -> Behavior (Set Evt.ClientCon) -> IO ()
-init netEvent clientsB = do
+init :: Int -> Evt.NetEventGetter -> Behavior (Set Evt.ClientCon) -> IO ()
+init port netEvent clientsB = do
     let static = "../wwwroot/"
     bytesB <- accumB 0 ( accMsgSize <$> netEvent Evt.AnyEvent )
 
     forkIO $ UI.startGUI UI.defaultConfig
-      { UI.tpPort       = 10000
+      { UI.tpPort       = port
       , UI.tpStatic     = Just static
       , UI.tpCustomHTML = Just "index.html"
       } ( setupGUI clientsB bytesB )
@@ -44,7 +44,8 @@ setupGUI :: (Show a) => Behavior (Set Evt.ClientCon) -> Behavior a -> Window -> 
 setupGUI clientsB bytesB window = void $ do
     (return window) # set title "Server Monitor"
     clientsView <- mkElement "pre" #. "clientsView"
-    topicsView <- mkElement "pre" #. "topicView"
+    relaysView  <- mkElement "pre" #. "relaysView"
+    topicsView  <- mkElement "pre" #. "topicView"
     netStat     <- UI.string "0"
     netView <- UI.new #. "netMonitor" #+ [
         string "Bytes total: "
@@ -53,6 +54,8 @@ setupGUI clientsB bytesB window = void $ do
           UI.h1 # set text "Server Monitor",
           UI.h2 # set text "Clients",
           element clientsView,
+          UI.h2 # set text "Relays",
+          element relaysView,
           UI.h2 # set text "Topics",
           element topicsView,
           element netView]
@@ -60,11 +63,14 @@ setupGUI clientsB bytesB window = void $ do
 
     -- Update the clientView on changes to the current list of clients
     element clientsView # sink text ( concatClients <$> clientsB )
-    element topicsView # sink text ( concatTopics <$> clientsB )
+    element relaysView  # sink text ( concatRelays <$> clientsB )
+    element topicsView  # sink text ( concatTopics <$> clientsB )
     element netStat # sink text ( show <$> bytesB )
-  where concatClients = intercalate "\n" . map show . Set.toList
+  where concatRelays = intercalate "\n" . map show . filter isRelay . Set.toList
+        concatClients = intercalate "\n" . map show . filter (not . isRelay) . Set.toList
         concatTopics  = intercalate ", " . map Text.unpack . topicSet
         topicSet      = Set.toList . Set.foldr Set.union Set.empty . Set.map Evt._topics
+        isRelay       = Evt.isRelay . Evt._client
 
 layout :: [UI Element] -> [UI Element]
 layout mainContent = [UI.div #. "container" #+ [

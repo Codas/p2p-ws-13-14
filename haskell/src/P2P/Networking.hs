@@ -25,13 +25,12 @@ acceptFork sock fn = do
     forkIO $ E.finally (fn (handle, addr)) (hClose handle) -- fork new io thread and make sure to
                                                            -- close everything after we are done.
 
--- Higher LVL API to connect to a remote server
-connectTo :: HostName -> Int -> (Handle -> IO b) -> IO b
+connectTo :: Show a => HostName -> a -> ((Handle, S.SockAddr) -> IO b) -> IO b
 connectTo host port fn = do
-    handle <- N.connectTo host portNumber -- connect to host and assign handel.
-    hSetBuffering handle LineBuffering    -- transmit every line (good for stdin).
-    hSetBinaryMode handle True
-    E.finally (fn handle) (hClose handle) -- pass handle to function and make
-                                          -- sure to close the handle after we
-                                          -- are done or in cass of errors.
-  where portNumber = N.PortNumber $ fromIntegral port
+    addrs <- S.getAddrInfo Nothing (Just host) (Just (show port))
+    let addr = head addrs
+    sock <- S.socket S.AF_INET S.Stream S.defaultProtocol
+    S.setSocketOption sock S.ReuseAddr 1
+    S.connect sock (S.addrAddress addr)
+    handle <- S.socketToHandle sock ReadWriteMode
+    E.finally (fn (handle, S.addrAddress addr)) (hClose handle) -- pass handle to function and make

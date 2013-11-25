@@ -42,16 +42,21 @@ type NetEventGetter = NetEventType -> Event NetEvent
 data Client = Client
               { sockAddr     :: Net.SockAddr
               , clientHandle :: Maybe IO.Handle
+              , isRelay      :: Bool
               , msgSize      :: MessageSize}
 
+isRelayL :: Lens' Client Bool
+isRelayL = lens isRelay (\c t -> c { isRelay = t })
+
 instance Eq Client where
-  (Client addr _ _) == (Client addr1 _ _) = addr == addr1
+  (Client addr _ _ _) == (Client addr1 _ _ _) = addr == addr1
 
 instance Ord Client where
-    compare (Client a _ _) (Client a1 _ _) = compare a a1
+    compare (Client a _ _ _) (Client a1 _ _ _) = compare a a1
 
 instance Show Client where
-    show (Client addr _ size) = show addr ++ " (" ++ show size ++ " bytes)"
+    show (Client addr _ r size) = cType ++ show addr ++ " (" ++ show size ++ " bytes)"
+        where cType = if r then "Relay " else "Client "
 
 data NetEventType = Connected
                   | Disconnected
@@ -61,6 +66,7 @@ data NetEventType = Connected
                   | FirstJoin
                   | LastPart
                   | Message
+                  | AskClient
                   | Broadcast
                   | AnyEvent
                   deriving ( Show, Eq )
@@ -80,11 +86,11 @@ data NetEvent = NetEvent NetEventType Client MessageInfo
               deriving ( Eq )
 
 instance Show NetEvent where
-    show (NetEvent Connected    c _) = "Client connected: " ++ show c
-    show (NetEvent Disconnected c _) = "Client disconnected: " ++ show c
-    show (NetEvent Ready        c _) = "currently listening on " ++ show c
-    show (NetEvent Join         c i) = "Client " ++ show c ++ " joined: " ++ show (mTopics i)
-    show (NetEvent Part         c i) = "Client " ++ show c ++ " parted: " ++ show (mTopics i)
+    show (NetEvent Connected    c _) = "Connected: " ++ show c
+    show (NetEvent Disconnected c _) = "Disconnected: " ++ show c
+    show (NetEvent Ready        c _) = "currently listening: " ++ show c
+    show (NetEvent Join         c i) = show c ++ " joined: " ++ show (Set.toList $ mTopics i)
+    show (NetEvent Part         c i) = show c ++ " parted: " ++ show (Set.toList $ mTopics i)
     show (NetEvent Message      c i) = show i ++ " from " ++ show c
     show (NetEvent t            c i) = "(NetEvent " ++ show t ++ " from " ++ show c ++ ". " ++ show i ++ ")"
 
@@ -141,7 +147,7 @@ accClientCon (NetEvent eType c i) cns =
   where ets     = mTopics i
         cn = ClientCon c ets
         sizedC = Set.map incMessageSize $ Set.filter (\cn' -> _client cn' == c) cns
-        incMessageSize = over client (\(Client a c s) -> (Client a c (s + mSize i)))
+        incMessageSize = over client (\(Client a c r s) -> (Client a c r (s + mSize i)))
         modTopics :: (Set Com.Topic -> Set Com.Topic) -> ClientCon -> ClientCon
         modTopics f cn'
             | c == _client cn' = over topics f cn'

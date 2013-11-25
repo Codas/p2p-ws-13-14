@@ -63,7 +63,7 @@ opts = info (serverOpts <**> helper)
 main :: IO ()
 main = Net.withSocketsDo $ do
     options <- execParser opts
-    Net.connectTo (opHost options) (opPort options) $ \serverHandle ->
+    Net.connectTo (opHost options) (opPort options) $ \(serverHandle, _) ->
         case opMessage options of
           Nothing  -> sendInteractive serverHandle
           Just msg -> sendMsg serverHandle $ Text.pack msg
