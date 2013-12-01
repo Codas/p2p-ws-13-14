@@ -4,7 +4,7 @@
 
 | 1 Byte       | 4 Bytes              | 2 Bytes  | 1 Byte            | 
 | :----------: | :------------------: | :------: | :---------------: |
-| Code & Flags | Adress (IPv4)        | Port     | Location          | 
+| Code & Flags | Address (IPv4)       | Port     | Location          | 
 
 **Hello**
 
@@ -16,7 +16,7 @@
 
 | 1 Byte       | 4 Bytes            | 2 Bytes   | 1 Byte               | 1 - 8 Bytes | 1+ Bytes   |
 | :----------: | :----------------: | :-------: | :------------------: | :---------: | :--------: |
-| Code & Flags | Adress (Initiator) | Port      | Location (Initiator) | Length      | Message    |
+| Code & Flags | Address (Initiator)| Port      | Location (Initiator) | Length      | Message    |
 
 
 ## Flags
