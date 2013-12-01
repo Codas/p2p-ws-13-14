@@ -1,59 +1,47 @@
 # Protocol definition
 
-**Basics - Ohne Kompression**:
+**SplitEdge - MergeEdge - Redirect**
 
-| 1 Byte       | 1 - 8 Bytes     | 1+ Bytes | 1 - 8 Bytes      | 1+ Bytes |
-| :----------: | :-------------: | :------: | :--------------: | :------: |
-| Code & Flags | Topic(s) Length | Topic(s) | Message Length   | Message  |
+| 1 Byte       | 4 Bytes              | 1 Byte            | 
+| :----------: | :------------------: | :---------------: |
+| Code & Flags | Adress (IPv4)        | Location          | 
 
-**Basics - Mit Kompression**:
+**Hello**
 
-| 1 Byte       | 1 - 8 Bytes       | 1 - 8 Bytes     | 1+ Bytes | 1 - 8 Bytes      | 1+ Bytes |
-| :----------: | :---------------: | :-------------: | :------: | :--------------: | :------: |
-| Code & Flags | Compressed Length | Topic(s) Length | Topic(s) | Message Length   | Message  |
+| 1 Byte       | 1 Byte            | 1 Byte            |
+| :----------: | :---------------: | :---------------: |
+| Code & Flags | Source Location   | Target Location   | 
 
-**Additional Fields**:
+**Message**:
 
-| 8 or 16 Bytes |
-| :----------:  |
-| IP Address    |
+| 1 Byte       | 4 Bytes            | 1 Byte               | 1 - 8 Bytes | 1+ Bytes   |
+| :----------: | :----------------: | :------------------: | :---------: | :--------: |
+| Code & Flags | Adress (Initiator) | Location (Initiator) | Length      | Message    |
 
-## Topic
-Only Characters above 32 are allowed (UTF is fine).
-Multiple Topics can be separated by a null byte. (Any better ideas?)
-
-Topics must not be longer than 128 characters (independent of bytes).
-
-IP Addresses are Either IPv4 or IPv6. Length field before every IP address
-needed.
 
 ## Flags
-| 7     | 6 - 3  | 2   | 1        | 0        |
-| :---: | :----: | :-: | :------: | :------: |
-| Admin | Action | Zip | Reserved | Reserved |
+| 7         | 6 - 3  | 2   | 1        | 0        |
+| :-------: | :----: | :-: | :------: | :------: |
+| Direction | Action | Zip | Reserved | Reserved |
 
 
-### Commands Client → Server
-**Regular**:
+**Action**:
 
-| Binary     | Command            | Sections          | Comments                             |
-| :---:      | :---               | :---              | :---                                 |
-| `0000` (0) | Join               | Topic(s)          | Join / create a topic                |
-| `0001` (1) | Part               | Topic(s)          | Unsubscribe from topic               |
-| `0010` (2) | Ask for Topic List | Nothing           | Requst topic list                    |
-| `0011` (3) | Receive Topic List | Topic(s)          | Receive List of Topics               |
-| `0100` (4) | Message            | Topic(s), Message | Send message to topic                |
-| `0101` (5) | Binary             | Topic(s), Message | Binary stream, big files             |
-| `0110` (6) | Broadcast          | Message           | Send message to all available topics |
+| Binary     | Command            | Comments                             |
+| :---:      | :---               | :---                                 |
+| `0000` (0) | SplitEdge          | Initial Join Request                 |
+| `0001` (1) | MergeEdge          | Leave Request                        |
+| `0010` (2) | Redirect           | Message to change Edge-Destination   |
+| `0011` (3) | Hello              | Ack                                  |
+| `0100` (4) | Message            |                                      |
 
-**Admin**:
+**Direction**:
 
-| Binary | Command      | Sections | Comments                            |
-| :---:  | :---         | :---     | :---                                |
-| `0000` (0) | Close        | Nothing  | Shut down server                    |
-| `0001` (1) | Delete topic | Topic    | Unregister everyone from this topic |
-| `0010` (2) | Kick user    | User(s)  | Kick User(s), specified by IPs      |
-| `0100` (4) | Statistics   | Nothing  | Get statistics for this server      |
+| Binary  | Direction |
+| :---:   | :---      |
+| `0`     | CW        |
+| `1`     | CCW       |
+
 
 ### Compression (Zip)
 Compression algorithm is [LZ4](https://code.google.com/p/lz4/).
@@ -88,8 +76,3 @@ which is 2342. This means that the directly following message field is exactly
 
 ## General
 - All text has to be encoded in UTF-8
-
-## Discussion
-Do you think a nickname system would add something? maybe make it optional? It
-would probably take some effort to implement correctly (while still staying 100%
-true and backwards compatible to the original specification)
