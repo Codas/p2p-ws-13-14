@@ -14,9 +14,9 @@
 
 **Message**:
 
-| 1 Byte       | 4 Bytes            | 1 Byte               | 1 - 8 Bytes | 1+ Bytes   |
-| :----------: | :----------------: | :------------------: | :---------: | :--------: |
-| Code & Flags | Adress (Initiator) | Location (Initiator) | Length      | Message    |
+| 1 Byte       | 4 Bytes            | 2 Bytes   | 1 Byte               | 1 - 8 Bytes | 1+ Bytes   |
+| :----------: | :----------------: | :-------: | :------------------: | :---------: | :--------: |
+| Code & Flags | Adress (Initiator) | Port      | Location (Initiator) | Length      | Message    |
 
 
 ## Flags
