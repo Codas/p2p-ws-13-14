@@ -2,9 +2,9 @@
 
 **SplitEdge - MergeEdge - Redirect**
 
-| 1 Byte       | 4 Bytes              | 1 Byte            | 
-| :----------: | :------------------: | :---------------: |
-| Code & Flags | Adress (IPv4)        | Location          | 
+| 1 Byte       | 4 Bytes              | 2 Bytes  | 1 Byte            | 
+| :----------: | :------------------: | :------: | :---------------: |
+| Code & Flags | Adress (IPv4)        | Port     | Location          | 
 
 **Hello**
 
