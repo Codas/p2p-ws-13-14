@@ -19,9 +19,12 @@ type Connection struct {
 }
 
 func NewConnection(rwc io.ReadWriteCloser) *Connection {
+	w := bufio.NewWriter(rwc)
+	w.WriteByte(120)
+	w.Flush()
 	return &Connection{
 		r: bufio.NewReader(rwc),
-		w: bufio.NewWriter(rwc),
+		w: w,
 		c: rwc,
 	}
 }

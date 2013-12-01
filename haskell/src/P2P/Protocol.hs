@@ -76,6 +76,7 @@ parseCommand byte = command
               (0:0:1:0:0:_) -> Just Message
               (0:0:1:0:1:_) -> Just Binary
               (0:0:1:1:0:_) -> Just Broadcast
+              (0:1:1:1:1:_) -> Just Client
               (1:0:0:0:0:_) -> Just Close
               (1:0:0:0:1:_) -> Just Delete
               (1:0:0:1:0:_) -> Just Kick
@@ -93,6 +94,7 @@ unparseCommand command z =
         Message        -> createCommandByteString 4  z
         Binary         -> createCommandByteString 5  z
         Broadcast      -> createCommandByteString 6  z
+        Client         -> createCommandByteString 15 False
         Close          -> createCommandByteString 16 z
         Delete         -> createCommandByteString 17 z
         Kick           -> createCommandByteString 18 z

@@ -25,4 +25,5 @@ data Command = Join
              | Kick
              | Statistics
              | Relay
+             | Client
              deriving ( Show )

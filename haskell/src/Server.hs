@@ -112,12 +112,13 @@ main = Net.withSocketsDo $ do
     clientB <- Evt.getClientBehavior netEvent
     joins <- stepper undefined (netEvent Evt.AnyEvent)
 
+    onChange clientB print
+
     initUIs netEvent clientB options
 
     forkIO $ connectToRelay options topicB clientB pEvt
     forkIO $ handleRelays clientB joins
     startServer options netEvent pEvt topicB clientB
-    -- _ <- forkIO $ connectToRelay options netEvent pEvt
 
     return ()
 
@@ -190,19 +191,13 @@ handleRelays clientB joins =
                 currentRs <- currentValue clientB
                 let nMsg   = M.NetMessage Join (Just ts) Nothing
                     subRs  = targetedRelays client currentRs
-                putStrLn "---------------------------------"
-                print subRs
                 writeToAllR subRs nMsg
-                putStrLn "---------------------------------"
                 return ()
             Evt.LastPart -> do
                 currentRs <- currentValue clientB
                 let nMsg   = M.NetMessage Part (Just ts) Nothing
                     subRs  = targetedRelays client currentRs
-                putStrLn "---------------------------------"
-                print subRs
                 writeToAllR subRs nMsg
-                putStrLn "---------------------------------"
                 return ()
             _ -> return ()
     -- handleRelayEvents netEvent handle client pEvt
@@ -238,7 +233,9 @@ handleJoin (_, clientB, pEvt, client) nMsg = case M.topics nMsg of
             topicsSet    = Set.map Evt._topics clientTopics
             clientTopics = Set.filter (\cn -> not (Evt.isRelay (Evt._client cn))) currentCs
             i            = Evt.MessageInfo 0 ts
-        _ <- pEvt $ Evt.NetEvent Evt.FirstJoin client (Evt.MessageInfo 0 newTopics)
+        -- unless (Set.null newTopics) $ do
+        pEvt $ Evt.NetEvent Evt.FirstJoin client (Evt.MessageInfo 0 newTopics)
+            -- return ()
         _ <- pEvt $ Evt.NetEvent Evt.Join client i
         return ()
 
@@ -250,7 +247,17 @@ handlePart (topicB, _, pEvt, client) nMsg = case M.topics nMsg of
         let legTopics = Set.map Evt._topic $ Set.filter (\tc -> Evt._clients tc == cSet) currentTs
             i         = Evt.MessageInfo 0 ts
             cSet = Set.singleton client
-        _ <- pEvt $ Evt.NetEvent Evt.LastPart client (Evt.MessageInfo 0 legTopics)
+            modClients f tc
+                | Set.member (Evt._topic tc) ts = L.over Evt.clients f tc
+                | otherwise = tc
+            modTopics = Set.map (modClients (Set.delete client)) currentTs
+            modTopics' = Set.map (modClients (Set.filter (not . Evt.isRelay))) currentTs
+        when (Set.null (Set.filter (\tc -> not (Set.null (Evt._clients tc))) modTopics')) $ do
+            _ <- pEvt $ Evt.NetEvent Evt.LastPart client (Evt.MessageInfo 0 legTopics)
+            return()
+        putStrLn "---------------"
+        print legTopics
+        putStrLn "---------------"
         _ <- pEvt $ Evt.NetEvent Evt.Part client i
         return ()
 
