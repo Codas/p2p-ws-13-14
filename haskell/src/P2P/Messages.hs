@@ -26,7 +26,7 @@ messageToByteString (NetMessage cmd ts msg) = result
               body                = topicBS `BS.append` messageBS
               zipping             = BS.length body > 20
               cmdBS               = unparseCommand cmd zipping
-              compressedBody      = compress body
+              (compressedBody, _) = compress body
               zippedBody          = unparseLength (BS.length compressedBody) `BS.append` compressedBody
               result              = cmdBS `BS.append` (if zipping then zippedBody else body)
 
