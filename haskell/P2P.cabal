@@ -20,11 +20,6 @@ cabal-version:       >=1.8
 -- An email address to which users can send suggestions, bug reports, and 
 -- patches.
 -- maintainer:          
-
--- Data-dir:            wwwroot
--- Data-files:          css/*.css,
---                      js/*.js,
---                      *.html
                      
 Library
   hs-source-dirs:      src
@@ -48,5 +43,5 @@ Executable server
     build-depends:       p2p, pipes ==4.0.*, utf8-string,
                          optparse-applicative, bytestring ==0.10.0.2, base ==4.6.*, network ==2.4.1.2,
                          network-simple ==0.3.*, base ==4.6.*, stm, network-simple ==0.3.*, 
-                         text, containers, lens, mtl, lz4 ==0.2.2, system-uuid
+                         text, containers, lens, mtl, lz4 ==0.2.2, uuid
     
