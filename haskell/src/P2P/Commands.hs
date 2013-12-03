@@ -6,24 +6,17 @@ import qualified Data.Set        as Set
 import qualified Data.Text       as T
 
 data Flags        = Flags { compressed :: Bool } deriving ( Show )
-type Topic        = T.Text
+type Port         = String
+type IP           = String
+type Location     = String
 type Message      = T.Text
 type BinaryStream = B.ByteString
-type Topics       = Set Topic
 
-
-data Command = Join
-             | Part
-             | AskTopics
-             | ReceiveTopics
+data Command = SplitEdge
+             | MergeEdge
+             | Redirect
+             | HelloCW
+             | HelloCCW
              | Message
-             | Binary
-             | Broadcast
              -- Admin commands
-             | Close
-             | Delete
-             | Kick
-             | Statistics
-             | Relay
-             | Client
              deriving ( Show )
