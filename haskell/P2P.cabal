@@ -20,25 +20,18 @@ cabal-version:       >=1.8
 -- An email address to which users can send suggestions, bug reports, and 
 -- patches.
 -- maintainer:          
-
--- Data-dir:            wwwroot
--- Data-files:          css/*.css,
---                      js/*.js,
---                      *.html
                      
 Library
   hs-source-dirs:      src
   
   -- Modules included in this library, other than Main.
-  exposed-modules:     P2P.Networking, P2P.Events, P2P.GUI, P2P.Protocol,
+  exposed-modules:     P2P.Networking, P2P.Protocol,
                        P2P.Commands, P2P.Messages
   
-  build-depends:       base ==4.6.*, network ==2.4.1.2, threepenny-gui ==0.4.*,
-                       pipes ==4.0.*, pipes-bytestring ==1.0.*,
-                       network-simple ==0.3.*, utf8-string,
+  build-depends:       base ==4.6.*, network ==2.4.1.2,
+                       network-simple ==0.3.*, utf8-string, stm,
                        optparse-applicative, bytestring ==0.10.0.2, binary-strict, 
-                       containers, lens, mtl, text, lz4 ==0.2.2, system-uuid, split
- 
+                       containers, lens, mtl, text, lz4 ==0.2.2, system-uuid, split 
 Executable server
     -- .hs or .lhs file containing the Main module.
     main-is:             Server.hs
@@ -46,19 +39,7 @@ Executable server
     hs-source-dirs:      src
    
     -- Other library packages from which modules are imported.
-    build-depends:       p2p, pipes ==4.0.*, pipes-bytestring ==1.0.*, utf8-string,
+    build-depends:       p2p, pipes ==4.0.*, utf8-string,
                          optparse-applicative, bytestring ==0.10.0.2, base ==4.6.*, network ==2.4.1.2,
-                         network-simple ==0.3.*, threepenny-gui ==0.4.*, base ==4.6.*, lz4 ==0.2.2,
-                         text, containers, lens, mtl, lz4 ==0.2.2, system-uuid, split
-    
-Executable client
-    -- .hs or .lhs file containing the Main module.
-    main-is:             Client.hs
-    
-    hs-source-dirs:      src
-    
-    -- Other library packages from which modules are imported.
-    build-depends:       p2p, pipes ==4.0.*, pipes-bytestring ==1.0.*, utf8-string,
-                         optparse-applicative, bytestring ==0.10.0.2, network ==2.4.1.2,
-                         network-simple ==0.3.*, threepenny-gui ==0.4.*, base ==4.6.*,
-                         lz4 ==0.2.2, text, containers, lens, mtl, system-uuid
+                         network-simple ==0.3.*, threepenny-gui ==0.4.*, stm, lz4 ==0.2.2,
+                         text, containers, lens, mtl, lz4 ==0.2.2, uuid, split    
