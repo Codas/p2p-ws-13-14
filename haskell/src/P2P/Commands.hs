@@ -18,5 +18,6 @@ data Command = SplitEdge
              | HelloCW
              | HelloCCW
              | Message
+             | Disconnected
              -- Admin commands
              deriving ( Show )

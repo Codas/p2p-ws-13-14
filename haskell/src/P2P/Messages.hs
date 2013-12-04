@@ -16,7 +16,7 @@ data NetMessage = NetMessage
                   , port         :: Maybe String  -- 2 Bytes
                   , fromLocation :: Maybe String  -- 1 Byte
                   , toLocation   :: Maybe String  -- 1 Byte
-	                , message      :: Maybe Message }
+	              , message      :: Maybe Message }
                   deriving (Show)
 
 
@@ -27,7 +27,7 @@ messageToByteString (NetMessage cmd addr port srcLoc trgLoc message) = result
               srcLocBS            = unparseLocation srcLoc
               trgLocBS            = unparseLocation trgLoc
               messageBS           = unparseMessage message
-              body                = ipBS `BS.append` portBS `BS.append` srcLocBS `BS.append` trgLocBS `BS.append` messageBS 
+              body                = ipBS `BS.append` portBS `BS.append` srcLocBS `BS.append` trgLocBS `BS.append` messageBS
               zipping             = BS.length body > 20
               cmdBS               = unparseCommand cmd zipping
               (compressedBody, _) = compress body
@@ -58,7 +58,7 @@ handleZippedMessage ls mCmd = (msg, rest)
               (decompressedBody, rest)              = decompressStream (LS.drop lengthLength ls) compressedLength
               (msg, _)                              = handleNormalMessage decompressedBody mCmd
 
-containsAddr :: Maybe Command -> Bool 
+containsAddr :: Maybe Command -> Bool
 containsAddr Nothing = False
 containsAddr (Just cmd) = case cmd of
   SplitEdge     -> True
@@ -67,7 +67,7 @@ containsAddr (Just cmd) = case cmd of
   Message       -> True
   _             -> False
 
-containsPort :: Maybe Command -> Bool 
+containsPort :: Maybe Command -> Bool
 containsPort Nothing = False
 containsPort (Just cmd) = case cmd of
   SplitEdge     -> True
@@ -76,7 +76,7 @@ containsPort (Just cmd) = case cmd of
   Message       -> True
   _             -> False
 
-containsSrcLocation :: Maybe Command -> Bool 
+containsSrcLocation :: Maybe Command -> Bool
 containsSrcLocation Nothing = False
 containsSrcLocation (Just cmd) = case cmd of
   HelloCW       -> True
@@ -87,7 +87,7 @@ containsSrcLocation (Just cmd) = case cmd of
   Message       -> True
   _             -> False
 
-containsTrgLocation :: Maybe Command -> Bool 
+containsTrgLocation :: Maybe Command -> Bool
 containsTrgLocation Nothing = False
 containsTrgLocation (Just cmd) = case cmd of
   HelloCW       -> True
@@ -143,10 +143,13 @@ createEdgeMessage :: Command -> IP -> Port -> Location -> NetMessage
 createEdgeMessage cmd ip port loc = NetMessage cmd (Just ip) (Just port) (Just loc) Nothing Nothing
 
 createSplitEdgeMessage :: IP -> Port -> Location -> NetMessage
-createSplitEdgeMessage = createEdgeMessage SplitEdge 
+createSplitEdgeMessage = createEdgeMessage SplitEdge
 
 createMergeEdgeMessage :: IP -> Port -> Location -> NetMessage
 createMergeEdgeMessage = createEdgeMessage MergeEdge
 
 createRedirectMessage :: IP -> Port -> Location -> NetMessage
 createRedirectMessage = createEdgeMessage Redirect
+
+createDisconnectedMessage :: NetMessage
+createDisconnectedMessage = NetMessage Disconnected Nothing Nothing Nothing Nothing Nothing

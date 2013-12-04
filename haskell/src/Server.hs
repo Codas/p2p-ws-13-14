@@ -140,19 +140,20 @@ newNodeGenerator serverID = do
                     , cwPeer = Nothing
                     , ccwPeer = Nothing}
 
-connectionToMessages :: Chan M.NetMessage -> Net.Socket -> LS.ByteString -> IO ()
+-- Just read every command
+connectionToMessages :: Chan (M.NetMessage, Net.Socket) -> Net.Socket -> LS.ByteString -> IO ()
 connectionToMessages chan socket bs
-    | LS.null bs   = return ()
-    | otherwise = do
-        let (nMsg, rest) = M.byteStringToMessage bs
-        writeChan chan nMsg
+    | LS.null bs = writeChan chan (M.createDisconnectedMessage, socket)
+    | otherwise  = do
+        let (msg, rest) = M.byteStringToMessage bs
+        writeChan chan (msg, socket)
         connectionToMessages chan socket rest
 
 
-handleNode :: Node -> Chan M.NetMessage -> Net.Socket -> IO ()
+handleNode :: Node -> Chan (M.NetMessage, Net.Socket) -> Net.Socket -> IO ()
 handleNode self chan sock = do
-    nMsg <- readChan chan
-    case M.command nMsg of
+    (msg, rSock) <- readChan chan
+    case M.command msg of
         SplitEdge -> undefined
         MergeEdge -> undefined
         Redirect  -> undefined
