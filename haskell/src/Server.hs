@@ -1,38 +1,37 @@
 module Server where
 
 import           Control.Applicative
-import           Control.Concurrent      (forkIO)
-import           Control.Concurrent.Chan (newChan, readChan, writeChan)
+import           Control.Concurrent             (forkIO)
+import           Control.Concurrent.Chan        (Chan, newChan, readChan,
+                                                 writeChan)
 import           Control.Concurrent.STM
-import           Control.Exception       (catch, finally)
-import qualified Control.Lens            as L
+import           Control.Exception              (catch, finally)
 import           Control.Monad
 import           Control.Monad.Error
 import           Control.Monad.State
-import           Control.Monad.Trans     (liftIO)
-import qualified Data.UUID               as UUID
-import qualified Data.UUID.V4            as UUID
+import           Control.Monad.Trans            (liftIO)
+import qualified Data.UUID                      as UUID
+import qualified Data.UUID.V4                   as UUID
 import           Options.Applicative
-import           Prelude                 hiding (catch)
-import           System.IO
+import           Prelude                        hiding (catch)
 
-import qualified Data.ByteString         as BS
-import qualified Data.ByteString.Lazy    as LS
-import qualified Data.List               as L
+import qualified Data.ByteString                as BS
+import qualified Data.ByteString.Lazy           as LS
+import qualified Data.List                      as L
 import           Data.Maybe
-import           Data.Set                (Set)
-import qualified Data.Set                as Set
-import qualified Data.Text               as Text
-import qualified Data.Text.Encoding      as TE
-import qualified Data.Text.IO            as Text
+import           Data.Set                       (Set)
+import qualified Data.Set                       as Set
+import qualified Data.Text                      as Text
+import qualified Data.Text.Encoding             as TE
+import qualified Data.Text.IO                   as Text
 import           Data.Word
-import qualified Network.Simple.TCP      as Net
-import qualified Text.Read               as R
+import qualified Network.Simple.TCP             as Net
+import qualified Network.Socket.ByteString.Lazy as NLS
+import qualified Text.Read                      as R
 
 import           P2P.Commands
-import qualified P2P.Messages            as M
--- import qualified P2P.Networking       as Net
-import qualified P2P.Protocol            as P
+import qualified P2P.Messages                   as M
+import qualified P2P.Protocol                   as P
 
 -----------------------------------
 -- Command line argument parsing --
@@ -118,16 +117,17 @@ main = Net.withSocketsDo $ do
     let address = opAddress options
         port    = opPort options
     Net.listen address port $ \(lSock, lAddr) -> do
-        node <- newNode
         chan <- newChan
-        forever . Net.acceptFork lSock $ \(rHandle, rAddr) -> do
-            connectionToMessages node
+        node <- newNode
+        forkIO $ handleNode node chan lSock
+        forever $ Net.acceptFork lSock $ \(rSock, rAddr) ->  do
+            bytes <- NLS.getContents rSock
+            connectionToMessages chan rSock bytes
 
 newServerID :: IO BS.ByteString
 newServerID = do
     serverID <- UUID.nextRandom
     return $ BS.drop 10 $ LS.toStrict (UUID.toByteString serverID)
-
 
 newNodeGenerator :: BS.ByteString -> IO ( IO Node )
 newNodeGenerator serverID = do
@@ -135,12 +135,33 @@ newNodeGenerator serverID = do
     return $ do
         val <- readTVarIO initial
         atomically $ modifyTVar initial succ
-        return $ Node serverID val Nothing Nothing
+        return Node { nodeID = serverID
+                    , location = val
+                    , cwPeer = Nothing
+                    , ccwPeer = Nothing}
 
--- -- Read content from socket handle, display it and notify system of events
-connectionToMessages = undefined
+connectionToMessages :: Chan M.NetMessage -> Net.Socket -> LS.ByteString -> IO ()
+connectionToMessages chan socket bs
+    | LS.null bs   = return ()
+    | otherwise = do
+        let (nMsg, rest) = M.byteStringToMessage bs
+        writeChan chan nMsg
+        connectionToMessages chan socket rest
 
-handlePeer = undefined
+
+handleNode :: Node -> Chan M.NetMessage -> Net.Socket -> IO ()
+handleNode self chan sock = do
+    nMsg <- readChan chan
+    case M.command nMsg of
+        SplitEdge -> undefined
+        MergeEdge -> undefined
+        Redirect  -> undefined
+        HelloCW   -> undefined
+        HelloCCW  -> undefined
+        Message   -> undefined
+        _         -> recurse self
+  where recurse s = handleNode s chan sock
+
 
 -----------------------------------
 -- Protocol and client handling. --
@@ -163,7 +184,7 @@ handlePeer = undefined
 -- Datatypes --
 ---------------
 data Node = Node
-            { peerID   :: BS.ByteString
+            { nodeID   :: BS.ByteString
             , location :: Word8
             , cwPeer   :: Maybe Net.Socket
             , ccwPeer  :: Maybe Net.Socket}
