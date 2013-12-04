@@ -20,9 +20,9 @@
 
 
 ## Flags
-| 7 - 3  | 2   | 1        | 0        |
-| :----: | :-: | :------: | :------: |
-| Action | Zip | Reserved | Reserved |
+| 7         | 6 - 3  | 2   | 1        | 0        |
+| :-------: | :----: | :-: | :------: | :------: |
+| Direction | Action | Zip | Reserved | Reserved |
 
 
 **Action**:
@@ -32,10 +32,15 @@
 | `0000` (0) | SplitEdge          | Initial Join Request                 |
 | `0001` (1) | MergeEdge          | Leave Request                        |
 | `0010` (2) | Redirect           | Message to change Edge-Destination   |
-| `0011` (3) | HelloCW            | Ack Clockwise                        |
-| `0100` (4) | HelloCCW           | Ack Counterclockwise                 |
-| `0101` (5) | Message            |                                      |
+| `0011` (3) | Hello              | Ack                                  |
+| `0100` (4) | Message            |                                      |
 
+**Direction**:
+
+| Binary  | Direction |
+| :---:   | :---      |
+| `0`     | CW        |
+| `1`     | CCW       |
 
 
 ### Compression (Zip)

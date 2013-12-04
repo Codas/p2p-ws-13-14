@@ -1,4 +1,4 @@
-module Main where
+module Server where
 
 import           Control.Applicative
 import           Control.Concurrent      (forkIO)
@@ -31,6 +31,7 @@ import qualified Text.Read               as R
 
 import           P2P.Commands
 import qualified P2P.Messages            as M
+-- import qualified P2P.Networking       as Net
 import qualified P2P.Protocol            as P
 
 -----------------------------------
@@ -39,7 +40,10 @@ import qualified P2P.Protocol            as P
 data Opts = Opts
   { opPort    :: String
   , opAddress :: Net.HostPreference
-  , opGui     :: Bool}
+  , opRelay   :: Maybe (Net.HostName, Int)
+  , opConsole :: Bool
+  , opGui     :: Bool
+  , opGuiPort :: Int}
   deriving Show
 
 -- define possible command line arguments. Call this programm with --help
@@ -61,10 +65,29 @@ serverOpts = Opts
         <> reader hostReader
         <> showDefaultWith (const "Any address")
         <> help "Address to accept incoming connections from. E.g. localhost.")
+     <*> nullOption
+         ( long "relay"
+        <> short 'r'
+        <> value Nothing
+        <> metavar "RELAY"
+        <> reader relayReader
+        <> showDefault
+        <> help "Relay to connect to.")
+     <*> switch
+         ( long "console"
+        <> short 'c'
+        <> help "Enable console logging of connections, msg size etc." )
      <*> switch
          ( long "gui"
         <> short 'g'
         <> help "Enable web based graphical user interface. Binds do port 10000." )
+     <*> nullOption
+         ( long "gport"
+        <> value 10000
+        <> metavar "GUIPORT"
+        <> reader auto
+        <> showDefault
+        <> help "GUI Port.")
 
 -- custom reader to parse the host preferencec
 hostReader :: Monad m => String -> m Net.HostPreference
@@ -92,7 +115,6 @@ main = Net.withSocketsDo $ do
     options <- execParser opts
     serverID <- newServerID
     newNode <- newNodeGenerator serverID
-
     let address = opAddress options
         port    = opPort options
     Net.listen address port $ \(lSock, lAddr) -> do
@@ -151,7 +173,9 @@ data Node = Node
 -- General UI initialization --
 -------------------------------
 -- initUIs :: Evt.NetEventGetter -> Behavior (Set Evt.ClientCon) -> Opts -> IO ()
--- initUIs netEvent clientB options = initConsoleUI netEvent
+-- initUIs netEvent clientB options = do
+--     when ( opGui options ) $ GUI.init (opGuiPort options) netEvent clientB
+--     when (opConsole options) $ initConsoleUI netEvent
 
 ----------------
 -- Console UI --
