@@ -163,24 +163,6 @@ handleNode self chan sock = do
         _         -> recurse self
   where recurse s = handleNode s chan sock
 
-
------------------------------------
--- Protocol and client handling. --
------------------------------------
--- handleProtocol :: EventTuple b -> LS.ByteString -> IO ()
--- handleProtocol evtTuple bs
---     | LS.null bs   = return ()
---     | otherwise = do
---         let (nMsg, rest) = M.byteStringToMessage bs
---         case M.command nMsg of
---             Join      -> undefined
---             Part      -> undefined
---             Message   -> undefined
---             Broadcast -> undefined
---             AskTopics -> undefined
---             _         -> return ()
---         handleProtocol evtTuple rest
-
 ---------------
 -- Datatypes --
 ---------------
