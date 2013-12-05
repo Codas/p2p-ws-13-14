@@ -166,7 +166,10 @@ answer (SplitEdgeMessage rAddr rPort rLoc) node rSock
         hello    = HelloCCWMessage lLoc rLoc
         redirect = RedirectMessage rAddr rPort lLoc
 
--- still missing...
+-- TODO: still missing:
+-- For hello commandes basically: Just return node with com. partner as cw or ccw peer.
+-- For merging... well thats a bit more dificult and stateful.
+-- Messages: Just forward to cw or ccw peer, depending on incoming socket (or drop)
 answer (HelloCCWMessage srcLoc trgLoc) node@(Node _ lLoc _ other _ _) rSock = undefined
 
 sendMessage :: Net.Socket -> Message -> IO ()
