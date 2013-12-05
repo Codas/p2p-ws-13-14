@@ -1,14 +1,19 @@
 module P2P.Nodes where
 
+import           Control.Concurrent.STM (atomically, modifyTVar, newTVarIO,
+                                         readTVarIO)
 import           Control.Lens
-import           Control.Monad       (mapM_)
-import           Control.Monad.Loops (andM)
-import           Prelude
+import           Control.Monad          (mapM_)
+import           Control.Monad.Loops    (andM)
 
-import           Data.ByteString     (ByteString)
-import           Data.Maybe          (catMaybes)
-import           Data.Word           (Word8)
-import           Network.Socket      (Socket)
+import           Data.ByteString        (ByteString, drop)
+import           Data.ByteString.Lazy   (toStrict)
+import           Data.Maybe             (catMaybes)
+import qualified Data.UUID              as UUID
+import qualified Data.UUID.V4           as UUID
+import           Data.Word              (Word8)
+import           Network.Socket         (Socket)
+import           Prelude                hiding (drop)
 
 data ProtocolState = Free
                    | Splitting
@@ -67,6 +72,27 @@ forAllPeers node fn = fmap fn $ catMaybes [_cwPeer node, _ccwPeer node]
 
 forAllSockets_ :: Monad m => Node -> (Socket -> m b) -> m ()
 forAllSockets_ node fn = mapM_ fn $ catMaybes $ fmap (nodeSocket node) [_cwPeer, _ccwPeer]
+
+--------------------
+-- Node generator --
+--------------------
+newServerID :: IO ByteString
+newServerID = do
+    serverID <- UUID.nextRandom
+    return $ drop 10 $ toStrict (UUID.toByteString serverID)
+
+newNodeGenerator :: ByteString -> IO ( IO Node )
+newNodeGenerator serverID = do
+    initial <- newTVarIO (0 :: Word8)
+    return $ do
+        val <- readTVarIO initial
+        atomically $ modifyTVar initial succ
+        return Node { _nodeID    = serverID
+                    , _location  = val
+                    , _state     = Free
+                    , _otherPeer = Nothing
+                    , _cwPeer    = Nothing
+                    , _ccwPeer   = Nothing }
 
 -----------
 -- Peers --

@@ -4,39 +4,26 @@ import           Control.Applicative
 import           Control.Concurrent             (forkIO)
 import           Control.Concurrent.Chan        (Chan, newChan, readChan,
                                                  writeChan)
-import           Control.Concurrent.STM
 import           Control.Exception              (catch, finally)
 import           Control.Lens
 import           Control.Lens.Setter
 import           Control.Monad
 import           Control.Monad.Error
-import           Control.Monad.State
 import           Control.Monad.Trans            (liftIO)
-import qualified Data.UUID                      as UUID
-import qualified Data.UUID.V4                   as UUID
 import           Options.Applicative            hiding ((&))
-import           Prelude
 
-import qualified Data.ByteString                as BS
 import qualified Data.ByteString.Lazy           as LS
-import qualified Data.List                      as L
 import           Data.Maybe
-import           Data.Set                       (Set)
-import qualified Data.Set                       as Set
-import qualified Data.Text                      as Text
-import qualified Data.Text.Encoding             as TE
-import qualified Data.Text.IO                   as Text
-import           Data.Word
 import qualified Network.Simple.TCP             as Net
 import           Network.Socket                 (sClose)
 import qualified Network.Socket.ByteString      as BLS
 import qualified Network.Socket.ByteString.Lazy as NLS
+import           Prelude
 import qualified Text.Read                      as R
 
 import qualified P2P.Marshalling                as M
 import           P2P.Messages
 import           P2P.Nodes
-import qualified P2P.Protocol                   as P
 
 -----------------------------------
 -- Command line argument parsing --
@@ -127,24 +114,6 @@ main = Net.withSocketsDo $ do
         forkIO $ handleNode node chan lSock
         forever $ Net.acceptFork lSock $ \(rSock, rAddr) ->  do
             socketToMessages chan rSock
-
-newServerID :: IO BS.ByteString
-newServerID = do
-    serverID <- UUID.nextRandom
-    return $ BS.drop 10 $ LS.toStrict (UUID.toByteString serverID)
-
-newNodeGenerator :: BS.ByteString -> IO ( IO Node )
-newNodeGenerator serverID = do
-    initial <- newTVarIO (0 :: Word8)
-    return $ do
-        val <- readTVarIO initial
-        atomically $ modifyTVar initial succ
-        return Node { _nodeID    = serverID
-                    , _location  = val
-                    , _state     = Free
-                    , _otherPeer = Nothing
-                    , _cwPeer    = Nothing
-                    , _ccwPeer   = Nothing }
 
 socketToMessages :: Chan (Message, Net.Socket) -> Net.Socket -> IO ()
 socketToMessages chan sock = do
