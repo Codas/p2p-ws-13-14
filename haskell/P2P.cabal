@@ -25,8 +25,7 @@ Library
   hs-source-dirs:      src
   
   -- Modules included in this library, other than Main.
-  exposed-modules:     P2P.Networking, P2P.Protocol,
-                       P2P.Commands, P2P.Messages
+  exposed-modules:     P2P.Protocol, P2P.Marshalling, P2P.Messages
   
   build-depends:       base ==4.6.*, network ==2.4.1.2,
                        network-simple ==0.3.*, utf8-string, stm, uuid,

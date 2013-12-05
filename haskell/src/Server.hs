@@ -29,8 +29,8 @@ import qualified Network.Simple.TCP             as Net
 import qualified Network.Socket.ByteString.Lazy as NLS
 import qualified Text.Read                      as R
 
-import           P2P.Commands
-import qualified P2P.Messages                   as M
+import           P2P.Messages
+import qualified P2P.Marshalling                as M
 import qualified P2P.Protocol                   as P
 
 -----------------------------------
@@ -154,13 +154,13 @@ handleNode :: Node -> Chan (M.NetMessage, Net.Socket) -> Net.Socket -> IO ()
 handleNode self chan sock = do
     (msg, rSock) <- readChan chan
     case M.command msg of
-        SplitEdge -> undefined
-        MergeEdge -> undefined
-        Redirect  -> undefined
-        HelloCW   -> undefined
-        HelloCCW  -> undefined
-        Message   -> undefined
-        _         -> recurse self
+        SplitEdge   -> undefined
+        MergeEdge   -> undefined
+        Redirect    -> undefined
+        HelloCW     -> undefined
+        HelloCCW    -> undefined
+        WithContent -> undefined
+        _           -> recurse self
   where recurse s = handleNode s chan sock
 
 ---------------

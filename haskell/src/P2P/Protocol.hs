@@ -14,19 +14,19 @@ import qualified Data.Text.Encoding   as TE
 import qualified Data.Word            as W
 import           Numeric
 
-import           P2P.Commands
+import           P2P.Messages
 
 -- Parse the Message of a given ByteString.
 -- ByteString must contain the length field.
 -- Any overflowing data of the ByteString is discarded.
-parseMessage :: LS.ByteString -> Maybe (Message, LS.ByteString)
-parseMessage bs = case parseBinary bs of
+parseContent :: LS.ByteString -> Maybe (Content, LS.ByteString)
+parseContent bs = case parseBinary bs of
     Just (binary, rest) -> Just (TE.decodeUtf8 (LS.toStrict binary),rest)
     _           -> Nothing
 
-unparseMessage :: Maybe Message -> BS.ByteString
-unparseMessage Nothing = BS.empty
-unparseMessage (Just message) =  lengthBS `BS.append` messageBS
+unparseContent :: Maybe Content -> BS.ByteString
+unparseContent Nothing = BS.empty
+unparseContent (Just message) =  lengthBS `BS.append` messageBS
     where messageBS  = TE.encodeUtf8 message
           lengthBS = unparseLength $ BS.length messageBS
 
@@ -56,7 +56,8 @@ parseCommand byte = command
               (0:0:0:1:0:_) -> Just Redirect
               (0:0:0:1:1:_) -> Just HelloCW
               (0:0:1:0:0:_) -> Just HelloCCW
-              (0:0:1:0:1:_) -> Just Message
+              (0:0:1:0:1:_) -> Just WithContent
+              (0:0:1:1:0:_) -> Just Disconnected
               _             -> Nothing
 
 unparseCommand :: Command -> Bool -> BS.ByteString
@@ -67,7 +68,8 @@ unparseCommand command z =
         Redirect            -> createCommandByteString 2  z
         HelloCW             -> createCommandByteString 3  z
         HelloCCW            -> createCommandByteString 4  z
-        Message             -> createCommandByteString 5  z
+        WithContent         -> createCommandByteString 5  z
+        Disconnected        -> createCommandByteString 6  z
 
 
 parseFlags :: W.Word8 -> Flags

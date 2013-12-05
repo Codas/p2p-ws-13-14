@@ -1,0 +1,175 @@
+module P2P.Marshalling where
+
+import           Control.Lens
+import qualified Data.ByteString      as BS
+import qualified Data.ByteString.Lazy as LS
+import qualified Data.Text            as T
+import qualified Data.Text.Encoding   as TE
+
+import           P2P.Messages
+import           P2P.Compression
+import           P2P.Protocol
+
+data NetMessage = NetMessage
+                  { command      :: Command
+                  , address      :: Maybe String  -- 4 Bytes
+                  , port         :: Maybe String  -- 2 Bytes
+                  , fromLocation :: Maybe String  -- 1 Byte
+                  , toLocation   :: Maybe String  -- 1 Byte
+	                , message      :: Maybe Content }
+                  deriving (Show)
+
+
+messageToByteString :: Message -> BS.ByteString
+messageToByteString msg = result
+        where (NetMessage cmd addr port srcLoc trgLoc content) = toNetMessage msg
+              ipBS                = unparseIP addr
+              portBS              = unparsePort port
+              srcLocBS            = unparseLocation srcLoc
+              trgLocBS            = unparseLocation trgLoc
+              contentBS           = unparseContent content
+              body                = ipBS `BS.append` portBS `BS.append` srcLocBS `BS.append` trgLocBS `BS.append` contentBS
+              zipping             = BS.length body > 20
+              cmdBS               = unparseCommand cmd zipping
+              (compressedBody, _) = compress body
+              zippedBody          = unparseLength (BS.length compressedBody) `BS.append` compressedBody
+              result              = cmdBS `BS.append` (if zipping then zippedBody else body)
+
+
+byteStringToMessage :: LS.ByteString -> (Maybe Message, LS.ByteString)
+byteStringToMessage ls = if zipped then zippedMessage else normalMessage
+        where mCmd              = parseCommand $ LS.head ls
+              (Flags zipped)    = parseFlags $ LS.head ls
+              zippedMessage     = handleZippedMessage (LS.tail ls) mCmd
+              normalMessage     = handleNormalMessage (LS.tail ls) mCmd
+
+handleNormalMessage :: LS.ByteString -> Maybe Command -> (Maybe Message, LS.ByteString)
+handleNormalMessage ls mCmd = (fromNetMessage $ NetMessage cmd addr port srcLoc trgLoc message, messageRest)
+        where (Just cmd)                  = mCmd
+              (addr, addrRest)            = extractIP ls mCmd
+              (port, portRest)            = extractPort addrRest mCmd
+              (srcLoc, srcLocRest)        = extractSrcLocation portRest mCmd
+              (trgLoc, trgLocRest)        = extractTrgLocation srcLocRest mCmd
+              (message, messageRest)      = extractContent trgLocRest mCmd
+
+handleZippedMessage :: LS.ByteString -> Maybe Command -> (Maybe Message, LS.ByteString)
+handleZippedMessage ls mCmd = (msg, rest)
+        where (Just cmd)                            = mCmd
+              Just (lengthLength, compressedLength) = parseLength ls
+              (decompressedBody, rest)              = decompressStream (LS.drop lengthLength ls) compressedLength
+              (msg, _)                              = handleNormalMessage decompressedBody mCmd
+
+containsAddr :: Maybe Command -> Bool
+containsAddr Nothing = False
+containsAddr (Just cmd) = case cmd of
+  SplitEdge     -> True
+  MergeEdge     -> True
+  Redirect      -> True
+  WithContent   -> True
+  _             -> False
+
+containsPort :: Maybe Command -> Bool
+containsPort Nothing = False
+containsPort (Just cmd) = case cmd of
+  SplitEdge     -> True
+  MergeEdge     -> True
+  Redirect      -> True
+  WithContent   -> True
+  _             -> False
+
+containsSrcLocation :: Maybe Command -> Bool
+containsSrcLocation Nothing = False
+containsSrcLocation (Just cmd) = case cmd of
+  HelloCW       -> True
+  HelloCCW      -> True
+  SplitEdge     -> True
+  MergeEdge     -> True
+  Redirect      -> True
+  WithContent   -> True
+  _             -> False
+
+containsTrgLocation :: Maybe Command -> Bool
+containsTrgLocation Nothing = False
+containsTrgLocation (Just cmd) = case cmd of
+  HelloCW       -> True
+  HelloCCW      -> True
+  _             -> False
+
+containsContent :: Maybe Command -> Bool
+containsContent Nothing = False
+containsContent (Just cmd) = case cmd of
+	WithContent   -> True
+	_             -> False
+
+extractIP :: LS.ByteString -> Maybe Command -> (Maybe IP, LS.ByteString)
+extractIP ls Nothing = (Nothing, ls)
+extractIP ls cmd     = if containsAddr cmd then (Just addr, rest) else (Nothing, ls)
+       where Just (addr, rest) = parseIP ls
+
+extractPort :: LS.ByteString -> Maybe Command -> (Maybe Port, LS.ByteString)
+extractPort ls Nothing = (Nothing, ls)
+extractPort ls cmd = if containsPort cmd then (Just port, rest) else (Nothing, ls)
+       where Just (port, rest) = parsePort ls
+
+extractSrcLocation :: LS.ByteString -> Maybe Command -> (Maybe Location, LS.ByteString)
+extractSrcLocation ls Nothing = (Nothing, ls)
+extractSrcLocation ls cmd     = if containsSrcLocation cmd then (Just location, rest) else (Nothing, ls)
+       where Just (location, rest) = parseLocation ls
+
+extractTrgLocation :: LS.ByteString -> Maybe Command -> (Maybe Location, LS.ByteString)
+extractTrgLocation ls Nothing = (Nothing, ls)
+extractTrgLocation ls cmd     = if containsTrgLocation cmd then (Just location, rest) else (Nothing, ls)
+       where Just (location, rest) = parseLocation ls
+
+extractContent :: LS.ByteString -> Maybe Command -> (Maybe Content, LS.ByteString)
+extractContent ls Nothing = (Nothing, ls)
+extractContent ls cmd     = if containsContent cmd then (Just content, rest) else (Nothing, ls)
+       where Just mTuple  = parseContent ls
+             (content, rest)  = mTuple
+
+createHelloCWMessage :: Maybe Location -> Maybe Location -> Maybe Message
+createHelloCWMessage (Just srcLoc) (Just trgLoc) = Just $ HelloCWMessage srcLoc trgLoc 
+createHelloCWMessage _ _ = Nothing
+
+createHelloCCWMessage :: Maybe Location -> Maybe Location -> Maybe Message
+createHelloCCWMessage (Just srcLoc) (Just trgLoc) = Just $ HelloCWMessage srcLoc trgLoc 
+createHelloCCWMessage _ _ = Nothing
+
+createContentMessage :: Maybe IP -> Maybe Port -> Maybe Location -> Maybe Content -> Maybe Message
+createContentMessage (Just ip) (Just port) (Just loc) (Just content) = Just $ ContentMessage ip port loc content
+createContentMessage _ _ _ _ = Nothing
+
+createSplitEdgeMessage :: Maybe IP -> Maybe Port -> Maybe Location -> Maybe Message
+createSplitEdgeMessage (Just ip) (Just port) (Just loc) = Just $ SplitEdgeMessage ip port loc
+createSplitEdgeMessage _ _ _ = Nothing
+
+createMergeEdgeMessage :: Maybe IP -> Maybe Port -> Maybe Location -> Maybe Message
+createMergeEdgeMessage (Just ip) (Just port) (Just loc) = Just $ MergeEdgeMessage ip port loc
+createMergeEdgeMessage _ _ _ = Nothing
+
+createRedirectMessage :: Maybe IP -> Maybe Port -> Maybe Location -> Maybe Message
+createRedirectMessage (Just ip) (Just port) (Just loc) = Just $ RedirectMessage ip port loc
+createRedirectMessage _ _ _ = Nothing
+
+createDisconnectedMessage :: Maybe Message
+createDisconnectedMessage = Just DisconnectedMessage
+
+toNetMessage :: Message -> NetMessage
+toNetMessage msg = case msg of
+  SplitEdgeMessage addr port loc         -> NetMessage SplitEdge (Just addr) (Just port) (Just loc) Nothing Nothing 
+  MergeEdgeMessage addr port loc         -> NetMessage MergeEdge (Just addr) (Just port) (Just loc) Nothing Nothing
+  RedirectMessage  addr port loc         -> NetMessage Redirect  (Just addr) (Just port) (Just loc) Nothing Nothing
+  HelloCWMessage   srcLoc trgLoc         -> NetMessage HelloCW  Nothing Nothing (Just srcLoc) (Just trgLoc) Nothing
+  HelloCCWMessage  srcLoc trgLoc         -> NetMessage HelloCCW Nothing Nothing (Just srcLoc) (Just trgLoc) Nothing
+  ContentMessage   addr port loc content -> NetMessage WithContent (Just addr) (Just port) (Just loc) Nothing (Just content)
+  DisconnectedMessage                    -> NetMessage Disconnected Nothing Nothing Nothing Nothing Nothing
+
+fromNetMessage :: NetMessage -> Maybe Message
+fromNetMessage (NetMessage cmd addr port srcLoc trgLoc content) = case cmd of
+  SplitEdge    -> createSplitEdgeMessage    addr port srcLoc
+  MergeEdge    -> createMergeEdgeMessage    addr port srcLoc
+  Redirect     -> createRedirectMessage     addr port srcLoc
+  HelloCW      -> createHelloCWMessage      srcLoc trgLoc
+  HelloCCW     -> createHelloCCWMessage     srcLoc trgLoc
+  WithContent  -> createContentMessage      addr port srcLoc content
+  Disconnected -> createDisconnectedMessage
