@@ -6,14 +6,16 @@ import           Control.Concurrent.Chan        (Chan, newChan, readChan,
                                                  writeChan)
 import           Control.Concurrent.STM
 import           Control.Exception              (catch, finally)
+import           Control.Lens
+import           Control.Lens.Setter
 import           Control.Monad
 import           Control.Monad.Error
 import           Control.Monad.State
 import           Control.Monad.Trans            (liftIO)
 import qualified Data.UUID                      as UUID
 import qualified Data.UUID.V4                   as UUID
-import           Options.Applicative
-import           Prelude                        hiding (catch)
+import           Options.Applicative            hiding ((&))
+import           Prelude
 
 import qualified Data.ByteString                as BS
 import qualified Data.ByteString.Lazy           as LS
@@ -26,11 +28,14 @@ import qualified Data.Text.Encoding             as TE
 import qualified Data.Text.IO                   as Text
 import           Data.Word
 import qualified Network.Simple.TCP             as Net
+import           Network.Socket                 (sClose)
+import qualified Network.Socket.ByteString      as BLS
 import qualified Network.Socket.ByteString.Lazy as NLS
 import qualified Text.Read                      as R
 
-import           P2P.Messages
 import qualified P2P.Marshalling                as M
+import           P2P.Messages
+import           P2P.Nodes
 import qualified P2P.Protocol                   as P
 
 -----------------------------------
@@ -121,8 +126,7 @@ main = Net.withSocketsDo $ do
         node <- newNode
         forkIO $ handleNode node chan lSock
         forever $ Net.acceptFork lSock $ \(rSock, rAddr) ->  do
-            bytes <- NLS.getContents rSock
-            connectionToMessages chan rSock bytes
+            socketToMessages chan rSock
 
 newServerID :: IO BS.ByteString
 newServerID = do
@@ -135,43 +139,72 @@ newNodeGenerator serverID = do
     return $ do
         val <- readTVarIO initial
         atomically $ modifyTVar initial succ
-        return Node { nodeID = serverID
-                    , location = val
-                    , cwPeer = Nothing
-                    , ccwPeer = Nothing}
+        return Node { _nodeID    = serverID
+                    , _location  = val
+                    , _state     = Free
+                    , _otherPeer = Nothing
+                    , _cwPeer    = Nothing
+                    , _ccwPeer   = Nothing }
+
+socketToMessages :: Chan (Message, Net.Socket) -> Net.Socket -> IO ()
+socketToMessages chan sock = do
+    bytes <- NLS.getContents sock
+    bytesToMessages chan sock bytes
 
 -- Just read every command
-connectionToMessages :: Chan (M.NetMessage, Net.Socket) -> Net.Socket -> LS.ByteString -> IO ()
-connectionToMessages chan socket bs
-    | LS.null bs = writeChan chan (M.createDisconnectedMessage, socket)
-    | otherwise  = do
-        let (msg, rest) = M.byteStringToMessage bs
-        writeChan chan (msg, socket)
-        connectionToMessages chan socket rest
+bytesToMessages :: Chan (Message, Net.Socket) -> Net.Socket -> LS.ByteString -> IO ()
+bytesToMessages chan rSock bs
+    | LS.null bs = writeChan chan (Shutdown, rSock)
+    | otherwise  =
+        case M.byteStringToMessage bs of
+            (Just msg, rest) -> do
+                writeChan chan (msg, rSock)
+                bytesToMessages chan rSock rest
+            (_, rest) -> bytesToMessages chan rSock rest
 
+handleNode :: Node -> Chan (Message, Net.Socket) -> Net.Socket -> IO ()
+handleNode self chan lSock
+    | isDone self = return ()
+    | otherwise = do
+        (msg, rSock) <- readChan chan
+        answer msg self rSock >>= recurse
+  where recurse s = handleNode s chan lSock
 
-handleNode :: Node -> Chan (M.NetMessage, Net.Socket) -> Net.Socket -> IO ()
-handleNode self chan sock = do
-    (msg, rSock) <- readChan chan
-    case M.command msg of
-        SplitEdge   -> undefined
-        MergeEdge   -> undefined
-        Redirect    -> undefined
-        HelloCW     -> undefined
-        HelloCCW    -> undefined
-        WithContent -> undefined
-        _           -> recurse self
-  where recurse s = handleNode s chan sock
+-- Some peer just disconnected. Check if it is of intereset for us, conditionally
+-- update the node record, than continue
+answer :: Message -> Node -> Net.Socket -> IO Node
+answer Shutdown node rSock
+    | _state node == Merging = do
+        when (isStarved node) $ forAllSockets_ node sClose
+        sClose rSock >> return (deletePeer node rSock & protocolState .~ Done)
+    | otherwise = sClose rSock >> return (deletePeer node rSock)
+  where deletePeer :: Node -> Net.Socket -> Node
+        deletePeer node peer
+            | nodeSocket node _cwPeer    == Just peer = node & cwPeer    .~ Nothing
+            | nodeSocket node _ccwPeer   == Just peer = node & ccwPeer   .~ Nothing
+            | nodeSocket node _otherPeer == Just peer = node & otherPeer .~ Nothing
+            | otherwise                               = node
 
----------------
--- Datatypes --
----------------
-data Node = Node
-            { nodeID   :: BS.ByteString
-            , location :: Word8
-            , cwPeer   :: Maybe Net.Socket
-            , ccwPeer  :: Maybe Net.Socket}
-            deriving ( Show, Eq )
+answer (SplitEdgeMessage rAddr rPort rLoc) node rSock
+    | isBusy node                = close node rSock
+    | isJust (_otherPeer node) = close node rSock
+    | isNothing (_cwPeer node) = close node rSock
+    | otherwise = do
+        _ <- forkIO $ sendMessage rSock hello
+        _ <- forkIO $ sendMessage (_socket (fromJust (_cwPeer node))) redirect
+        return $ node & otherPeer .~ (Just $ Peer rSock True rLoc)
+  where lLoc     = _location node
+        hello    = HelloCCWMessage lLoc rLoc
+        redirect = RedirectMessage rAddr rPort lLoc
+
+-- still missing...
+answer (HelloCCWMessage srcLoc trgLoc) node@(Node _ lLoc _ other _ _) rSock = undefined
+
+sendMessage :: Net.Socket -> Message -> IO ()
+sendMessage rSock msg = BLS.sendAll rSock $ M.messageToByteString msg
+
+close :: Node -> Net.Socket -> IO Node
+close node rSock = sClose rSock >> return node
 
 -------------------------------
 -- General UI initialization --

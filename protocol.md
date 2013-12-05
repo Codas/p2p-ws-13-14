@@ -2,15 +2,22 @@
 
 **SplitEdge - MergeEdge - Redirect**
 
-| 1 Byte       | 4 Bytes              | 2 Bytes  | 1 Byte            | 
+| 1 Byte       | 4 Bytes              | 2 Bytes  | 1 Byte            |
 | :----------: | :------------------: | :------: | :---------------: |
-| Code & Flags | Address (IPv4)       | Port     | Location          | 
+| Code & Flags | Address (IPv4)       | Port     | Location          |
 
 **Hello**
 
 | 1 Byte       | 1 Byte            | 1 Byte            |
 | :----------: | :---------------: | :---------------: |
-| Code & Flags | Source Location   | Target Location   | 
+| Code & Flags | Source Location   | Target Location   |
+
+
+**Cancel - Try-Later**
+
+| 1 Byte       | 1 Byte            | 1 Byte            |
+| :----------: | :---------------: | :---------------: |
+| Code & Flags | Source Location   | Target Location   |
 
 **Message**:
 
@@ -20,20 +27,23 @@
 
 
 ## Flags
-| 7         | 6 - 3  | 2   | 1        | 0        |
-| :-------: | :----: | :-: | :------: | :------: |
-| Direction | Action | Zip | Reserved | Reserved |
+| 7 - 3  | 2   | 1        | 0        |
+| :----: | :-: | :------: | :------: |
+| Action | Zip | Reserved | Reserved |
 
 
 **Action**:
 
-| Binary     | Command            | Comments                             |
-| :---:      | :---               | :---                                 |
-| `0000` (0) | SplitEdge          | Initial Join Request                 |
-| `0001` (1) | MergeEdge          | Leave Request                        |
-| `0010` (2) | Redirect           | Message to change Edge-Destination   |
-| `0011` (3) | Hello              | Ack                                  |
-| `0100` (4) | Message            |                                      |
+| Binary     | Command   | Comments                           |
+| :---:      | :---      | :---                               |
+| `00000` (0) | SplitEdge | Initial Join Request               |
+| `00001` (1) | MergeEdge | Leave Request                      |
+| `00010` (2) | Redirect  | Message to change Edge-Destination |
+| `00011` (3) | Hello CW  | Ack                                |
+| `00100` (4) | Hello CCW | Ack                                |
+| `00101` (5) | Try-Later | Cancel for MergeEdge               |
+| `00110` (6) | Cancel    | Cancel for Redirect                |
+| `01000` (8) | Message   |                                    |
 
 **Direction**:
 

@@ -6,7 +6,7 @@ import qualified Data.ByteString.Lazy as LS
 import           Data.Char
 import           Data.Int
 import           Data.List
-import qualified Data.List.Split      as SP          
+import qualified Data.List.Split      as SP
 import           Data.Set             (Set)
 import qualified Data.Set             as Set
 import qualified Data.Text            as T
@@ -56,8 +56,9 @@ parseCommand byte = command
               (0:0:0:1:0:_) -> Just Redirect
               (0:0:0:1:1:_) -> Just HelloCW
               (0:0:1:0:0:_) -> Just HelloCCW
-              (0:0:1:0:1:_) -> Just WithContent
-              (0:0:1:1:0:_) -> Just Disconnected
+              (0:0:1:0:1:_) -> Just TryLater
+              (0:0:1:1:0:_) -> Just Cancel
+              (0:1:0:0:0:_) -> Just WithContent
               _             -> Nothing
 
 unparseCommand :: Command -> Bool -> BS.ByteString
@@ -68,8 +69,9 @@ unparseCommand command z =
         Redirect            -> createCommandByteString 2  z
         HelloCW             -> createCommandByteString 3  z
         HelloCCW            -> createCommandByteString 4  z
-        WithContent         -> createCommandByteString 5  z
-        Disconnected        -> createCommandByteString 6  z
+        TryLater            -> createCommandByteString 5  z
+        Cancel              -> createCommandByteString 6  z
+        WithContent         -> createCommandByteString 8  z
 
 
 parseFlags :: W.Word8 -> Flags
@@ -111,7 +113,7 @@ parseIP bs = Just (result, LS.drop 4 bs)
           result   = concat ipAsList :: String
 
 unparsePort :: Maybe String -> BS.ByteString
-unparsePort Nothing     = BS.empty 
+unparsePort Nothing     = BS.empty
 unparsePort (Just port) = BS.pack $ intToWords portAsInt
     where portAsInt = read port :: Int
 
@@ -121,14 +123,13 @@ parsePort ls = Just(show result, LS.drop 2 ls)
           secondWord = fromIntegral (LS.head $ LS.tail ls) :: Int
           result = firstWord * 256 + secondWord
 
-unparseLocation :: Maybe String -> BS.ByteString
+unparseLocation :: Maybe Location -> BS.ByteString
 unparseLocation Nothing    = BS.empty
-unparseLocation (Just loc) = BS.singleton locToWord
-    where locToWord = read loc :: W.Word8 
+unparseLocation (Just loc) = BS.singleton loc
 
-parseLocation :: LS.ByteString -> Maybe (String, LS.ByteString)
+parseLocation :: LS.ByteString -> Maybe (Location, LS.ByteString)
 parseLocation ls = Just(result, LS.tail ls)
-    where result = show $ LS.head ls
+    where result = LS.head ls
 
 
 bytesToInt :: (Integral a, Num a1) => [a] -> a1

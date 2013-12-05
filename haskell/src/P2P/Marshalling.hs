@@ -6,19 +6,18 @@ import qualified Data.ByteString.Lazy as LS
 import qualified Data.Text            as T
 import qualified Data.Text.Encoding   as TE
 
-import           P2P.Messages
 import           P2P.Compression
+import           P2P.Messages
 import           P2P.Protocol
 
 data NetMessage = NetMessage
                   { command      :: Command
                   , address      :: Maybe String  -- 4 Bytes
                   , port         :: Maybe String  -- 2 Bytes
-                  , fromLocation :: Maybe String  -- 1 Byte
-                  , toLocation   :: Maybe String  -- 1 Byte
-	                , message      :: Maybe Content }
+                  , fromLocation :: Maybe Location  -- 1 Byte
+                  , toLocation   :: Maybe Location  -- 1 Byte
+	              , message      :: Maybe Content }
                   deriving (Show)
-
 
 messageToByteString :: Message -> BS.ByteString
 messageToByteString msg = result
@@ -128,11 +127,11 @@ extractContent ls cmd     = if containsContent cmd then (Just content, rest) els
              (content, rest)  = mTuple
 
 createHelloCWMessage :: Maybe Location -> Maybe Location -> Maybe Message
-createHelloCWMessage (Just srcLoc) (Just trgLoc) = Just $ HelloCWMessage srcLoc trgLoc 
+createHelloCWMessage (Just srcLoc) (Just trgLoc) = Just $ HelloCWMessage srcLoc trgLoc
 createHelloCWMessage _ _ = Nothing
 
 createHelloCCWMessage :: Maybe Location -> Maybe Location -> Maybe Message
-createHelloCCWMessage (Just srcLoc) (Just trgLoc) = Just $ HelloCWMessage srcLoc trgLoc 
+createHelloCCWMessage (Just srcLoc) (Just trgLoc) = Just $ HelloCWMessage srcLoc trgLoc
 createHelloCCWMessage _ _ = Nothing
 
 createContentMessage :: Maybe IP -> Maybe Port -> Maybe Location -> Maybe Content -> Maybe Message
@@ -151,18 +150,22 @@ createRedirectMessage :: Maybe IP -> Maybe Port -> Maybe Location -> Maybe Messa
 createRedirectMessage (Just ip) (Just port) (Just loc) = Just $ RedirectMessage ip port loc
 createRedirectMessage _ _ _ = Nothing
 
-createDisconnectedMessage :: Maybe Message
-createDisconnectedMessage = Just DisconnectedMessage
+createTryLaterMessage :: Maybe Message
+createTryLaterMessage = Just TryLaterMessage
+
+createCancelMessage :: Maybe Message
+createCancelMessage = Just CancelMessage
 
 toNetMessage :: Message -> NetMessage
 toNetMessage msg = case msg of
-  SplitEdgeMessage addr port loc         -> NetMessage SplitEdge (Just addr) (Just port) (Just loc) Nothing Nothing 
+  SplitEdgeMessage addr port loc         -> NetMessage SplitEdge (Just addr) (Just port) (Just loc) Nothing Nothing
   MergeEdgeMessage addr port loc         -> NetMessage MergeEdge (Just addr) (Just port) (Just loc) Nothing Nothing
   RedirectMessage  addr port loc         -> NetMessage Redirect  (Just addr) (Just port) (Just loc) Nothing Nothing
   HelloCWMessage   srcLoc trgLoc         -> NetMessage HelloCW  Nothing Nothing (Just srcLoc) (Just trgLoc) Nothing
   HelloCCWMessage  srcLoc trgLoc         -> NetMessage HelloCCW Nothing Nothing (Just srcLoc) (Just trgLoc) Nothing
   ContentMessage   addr port loc content -> NetMessage WithContent (Just addr) (Just port) (Just loc) Nothing (Just content)
-  DisconnectedMessage                    -> NetMessage Disconnected Nothing Nothing Nothing Nothing Nothing
+  TryLaterMessage                        -> NetMessage TryLater Nothing Nothing Nothing Nothing Nothing
+  CancelMessage                          -> NetMessage Cancel Nothing Nothing Nothing Nothing Nothing
 
 fromNetMessage :: NetMessage -> Maybe Message
 fromNetMessage (NetMessage cmd addr port srcLoc trgLoc content) = case cmd of
@@ -172,4 +175,5 @@ fromNetMessage (NetMessage cmd addr port srcLoc trgLoc content) = case cmd of
   HelloCW      -> createHelloCWMessage      srcLoc trgLoc
   HelloCCW     -> createHelloCCWMessage     srcLoc trgLoc
   WithContent  -> createContentMessage      addr port srcLoc content
-  Disconnected -> createDisconnectedMessage
+  TryLater     -> createTryLaterMessage
+  Cancel       -> createCancelMessage
