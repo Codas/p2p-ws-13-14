@@ -30,7 +30,7 @@ Library
   build-depends:       base ==4.6.*, network ==2.4.1.2, monad-loops,
                        network-simple ==0.3.*, utf8-string, stm, uuid,
                        optparse-applicative, bytestring ==0.10.0.2, binary-strict, 
-                       containers, lens, mtl, text, lz4 ==0.2.2, split, monad-loops
+                       containers, lens, mtl, text, lz4 ==0.2.2, split
 Executable server
     -- .hs or .lhs file containing the Main module.
     main-is:             Server.hs
