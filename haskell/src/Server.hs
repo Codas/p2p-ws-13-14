@@ -1,4 +1,4 @@
-module Server where
+module Main where
 
 import           Control.Applicative
 import           Control.Concurrent             (forkIO)
@@ -110,6 +110,7 @@ opts = info (serverOpts <**> helper)
 main :: IO ()
 main = Net.withSocketsDo $ do
     options <- execParser opts
+    putStrLn "Awaining your command, master"
     serverID <- newServerID
     newNode <- newNodeGenerator serverID
     let address = opAddress options
@@ -214,8 +215,19 @@ answer CancelMessage node rSock _
         return $ node & otherPeer .~ Nothing
 
 answer (MergeEdgeMessage addr port trgLoc) node rSock _ = undefined
-answer (ContentMessage _ _ srcLoc content) node rSock _ = undefined
-answer TryLaterMessage node rSock _                     = undefined
+answer TryLaterMessage node rSock _ = undefined
+answer msg@(ContentMessage _ _ srcLoc content) node rSock _
+    | or $ fmap ((== Just srcLoc) . nodeLocation node) [_ccwPeer, _cwPeer] = do
+        print content -- debugging only
+        when (cwLoc  == Just srcLoc) $ mapM_ (`sendMessage` newMsg) ccwSocket
+        when (ccwLoc == Just srcLoc) $ mapM_ (`sendMessage` newMsg) cwSocket
+        return node
+    | otherwise = return node
+  where cwLoc     = nodeLocation node _cwPeer
+        ccwLoc    = nodeLocation node _ccwPeer
+        cwSocket  = maybeToList $ nodeSocket node _cwPeer
+        ccwSocket = maybeToList $ nodeSocket node _ccwPeer
+        newMsg    = msg & _srcLoc .~ (_location node)
 
 sendMessage :: Net.Socket -> Message -> IO ()
 sendMessage rSock msg = BLS.sendAll rSock $ M.messageToByteString msg

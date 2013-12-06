@@ -1,5 +1,6 @@
 module P2P.Messages where
 
+import           Control.Lens
 import           Data.ByteString (ByteString)
 import           Data.Text       (Text)
 import           Data.Word       (Word8)
@@ -32,3 +33,6 @@ data Message = SplitEdgeMessage {address :: IP, port :: Port, srcLoc :: Location
              | CancelMessage
              | Shutdown
              deriving (Show, Eq)
+
+_srcLoc :: Lens' Message Location
+_srcLoc = lens srcLoc (\record v -> record { srcLoc = v })

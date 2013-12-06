@@ -56,6 +56,9 @@ isStarved node = and $ forAllPeers node _isReadable
 nodeSocket :: Node -> (Node -> Maybe Peer) -> Maybe Socket
 nodeSocket node getter = fmap _socket (getter node)
 
+nodeLocation :: Node -> (Node -> Maybe Peer) -> Maybe Location
+nodeLocation node getter = fmap _peerLocation (getter node)
+
 isBusy :: Node -> Bool
 isBusy Node { _state = Free } = False
 isBusy _                      = True

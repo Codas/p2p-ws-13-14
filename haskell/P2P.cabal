@@ -27,7 +27,7 @@ Library
   -- Modules included in this library, other than Main.
   exposed-modules:     P2P.Protocol, P2P.Marshalling, P2P.Messages, P2P.Nodes
   
-  build-depends:       base ==4.6.*, network ==2.4.1.2,
+  build-depends:       base ==4.6.*, network ==2.4.1.2, monad-loops,
                        network-simple ==0.3.*, utf8-string, stm, uuid,
                        optparse-applicative, bytestring ==0.10.0.2, binary-strict, 
                        containers, lens, mtl, text, lz4 ==0.2.2, split, monad-loops
@@ -38,7 +38,7 @@ Executable server
     hs-source-dirs:      src
    
     -- Other library packages from which modules are imported.
-    build-depends:       p2p, pipes ==4.0.*, utf8-string,
+    build-depends:       p2p, pipes ==4.0.*, utf8-string, monad-loops,
                          optparse-applicative, bytestring ==0.10.0.2, base ==4.6.*, network ==2.4.1.2,
                          network-simple ==0.3.*, threepenny-gui ==0.4.*, stm, lz4 ==0.2.2,
                          text, containers, lens, mtl, lz4 ==0.2.2, uuid, split    
