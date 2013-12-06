@@ -194,6 +194,11 @@ func listClients() {
 	m.RLock()
 	defer m.RUnlock()
 
+	if len(pool) == 0 {
+		fmt.Println("No clients currently running")
+		return
+	}
+
 	fmt.Println("Clients currently running on Ports:")
 	for _, c := range pool {
 		fmt.Print(c.port, " ")
