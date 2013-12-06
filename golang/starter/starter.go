@@ -9,8 +9,11 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
+	"syscall"
 )
 
 var (
@@ -20,14 +23,13 @@ var (
 )
 
 var pool []*Client
+var m = new(sync.RWMutex)
 
 type Client struct {
 	c    *exec.Cmd
 	port int
 
 	in *bufio.Writer
-
-	closed chan<- error
 }
 
 func main() {
@@ -51,17 +53,18 @@ func startupClients(clients, locations int) {
 			continue
 		}
 
+		m.Lock()
 		pool = append(pool, c)
+		m.Unlock()
 		*port++
 	}
 }
 
 func startupClient(port int) (c *Client, err error) {
-	fmt.Printf("[%d] Starting..\n", port)
+	fmt.Printf("#%d Starting..\n", port)
 
 	c = &Client{
-		port:   port,
-		closed: make(chan error, 1),
+		port: port,
 	}
 
 	c.c = exec.Command("runhaskell", "Server.hs", "-c", "-p", strconv.Itoa(port))
@@ -84,9 +87,15 @@ func startupClient(port int) (c *Client, err error) {
 	}
 	go printReader(port, errPipe, os.Stderr)
 
-	go func(err chan<- error) {
-		err <- c.c.Run()
-	}(c.closed)
+	go func() {
+		err := c.c.Run()
+		if err != nil {
+			fmt.Printf("#%d Exited..\n", c.port)
+		} else {
+			fmt.Printf("#%d Exited (Error: %s)..\n", c.port, err)
+		}
+		removeClient(c)
+	}()
 
 	return c, nil
 }
@@ -128,7 +137,7 @@ func parseStdIO() {
 		} else {
 			switch text {
 			case "q":
-				shutdownClients(len(pool))
+				shutdownClients(-1)
 				return
 			case "l":
 				listClients()
@@ -141,25 +150,50 @@ func parseStdIO() {
 }
 
 func shutdownClients(num int) {
-	if num > len(pool) {
-		num = len(pool)
-	}
-	for i := 0; i < num; i++ {
-		r := rand.Intn(len(pool))
-		c := pool[r]
+	m.RLock()
+	defer m.RUnlock()
 
-		fmt.Printf("[%d] Shutting down..\n", c.port)
-		//if err := c.c.Process.Signal(os.Interrupt); err != nil {
-		if err := c.c.Process.Signal(os.Kill); err != nil {
-			fmt.Fprintln(os.Stderr, "Error sending signal:", err)
+	if num > len(pool) || num < 0 {
+		for _, c := range pool {
+			shutdownClient(c)
 		}
+		return
+	}
 
-		pool[r] = pool[len(pool)-1]
-		pool = pool[:len(pool)-1]
+	// shutdown num random clients
+	perm := rand.Perm(len(pool))
+	for r := 0; r < num; r++ {
+		c := pool[perm[r]]
+
+		shutdownClient(c)
+	}
+}
+
+func shutdownClient(c *Client) {
+	fmt.Printf("#%d Sending Interrupt..\n", c.port)
+	if err := sendInterruptSignal(c.c.Process); err != nil {
+		fmt.Fprintln(os.Stderr, "#%d Error sending signal:", err)
+	}
+}
+
+func removeClient(c *Client) {
+	m.Lock()
+	defer m.Unlock()
+	if len(pool) == 0 {
+		return
+	}
+	for i, cr := range pool {
+		if c == cr {
+			pool[i] = pool[len(pool)-1]
+			pool = pool[:len(pool)-1]
+		}
 	}
 }
 
 func listClients() {
+	m.RLock()
+	defer m.RUnlock()
+
 	fmt.Println("Clients currently running on Ports:")
 	for _, c := range pool {
 		fmt.Print(c.port, " ")
@@ -167,15 +201,20 @@ func listClients() {
 	fmt.Println()
 }
 
-/*
-func cleanupClients() {
-	for i, c := range pool {
-		select {
-		case e := <-c.closed:
-			c.closed <- e
-			pool[i] = nil
-		default:
+func sendInterruptSignal(p *os.Process) error {
+	// danke windows für die extra wurst
+	if runtime.GOOS == "windows" {
+		d, e := syscall.LoadDLL("kernel32.dll")
+		if e != nil {
+			return e
 		}
+		proc, e := d.FindProc("GenerateConsoleCtrlEvent")
+		if e != nil {
+			return e
+		}
+		_, _, e = proc.Call(syscall.CTRL_BREAK_EVENT, uintptr(p.Pid))
+		return e
+	} else {
+		return p.Signal(os.Interrupt)
 	}
 }
-*/
