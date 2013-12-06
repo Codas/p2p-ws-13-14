@@ -215,7 +215,7 @@ answer CancelMessage node rSock _
 
 answer (MergeEdgeMessage addr port trgLoc) node rSock _ = undefined
 answer (ContentMessage _ _ srcLoc content) node rSock _ = undefined
-answer TryLaterMessage node rSock _ = undefined
+answer TryLaterMessage node rSock _                     = undefined
 
 sendMessage :: Net.Socket -> Message -> IO ()
 sendMessage rSock msg = BLS.sendAll rSock $ M.messageToByteString msg
