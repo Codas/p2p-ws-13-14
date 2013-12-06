@@ -82,8 +82,6 @@ containsSrcLocation (Just cmd) = case cmd of
   HelloCW       -> True
   HelloCCW      -> True
   SplitEdge     -> True
-  MergeEdge     -> True
-  Redirect      -> True
   WithContent   -> True
   _             -> False
 
@@ -92,6 +90,8 @@ containsTrgLocation Nothing = False
 containsTrgLocation (Just cmd) = case cmd of
   HelloCW       -> True
   HelloCCW      -> True
+  MergeEdge     -> True
+  Redirect      -> True
   _             -> False
 
 containsContent :: Maybe Command -> Bool
@@ -127,7 +127,6 @@ extractContent ls cmd     = if containsContent cmd then (Just content, rest) els
              (content, rest)  = mTuple
 
 createHelloCWMessage :: Maybe Location -> Maybe Location -> Maybe Message
-createHelloCWMessage (Just srcLoc) (Just trgLoc) = Just $ HelloCWMessage srcLoc trgLoc
 createHelloCWMessage _ _ = Nothing
 
 createHelloCCWMessage :: Maybe Location -> Maybe Location -> Maybe Message
@@ -170,8 +169,8 @@ toNetMessage msg = case msg of
 fromNetMessage :: NetMessage -> Maybe Message
 fromNetMessage (NetMessage cmd addr port srcLoc trgLoc content) = case cmd of
   SplitEdge    -> createSplitEdgeMessage    addr port srcLoc
-  MergeEdge    -> createMergeEdgeMessage    addr port srcLoc
-  Redirect     -> createRedirectMessage     addr port srcLoc
+  MergeEdge    -> createMergeEdgeMessage    addr port trgLoc
+  Redirect     -> createRedirectMessage     addr port trgLoc
   HelloCW      -> createHelloCWMessage      srcLoc trgLoc
   HelloCCW     -> createHelloCCWMessage     srcLoc trgLoc
   WithContent  -> createContentMessage      addr port srcLoc content

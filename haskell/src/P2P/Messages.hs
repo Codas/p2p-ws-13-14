@@ -23,8 +23,8 @@ data Command = SplitEdge
              deriving ( Show )
 
 data Message = SplitEdgeMessage {address :: IP, port :: Port, srcLoc :: Location}
-             | MergeEdgeMessage {address :: IP, port :: Port, srcLoc :: Location}
-             | RedirectMessage  {address :: IP, port :: Port, srcLoc :: Location}
+             | MergeEdgeMessage {address :: IP, port :: Port, trgLoc :: Location}
+             | RedirectMessage  {address :: IP, port :: Port, trgLoc :: Location}
              | HelloCWMessage   {srcLoc  :: Location, trgLoc :: Location}
              | HelloCCWMessage  {srcLoc  :: Location, trgLoc :: Location}
              | ContentMessage   {address :: IP, port :: Port, srcLoc :: Location, content :: Content}

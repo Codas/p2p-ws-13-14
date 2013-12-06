@@ -15,6 +15,8 @@ import           Data.Word              (Word8)
 import           Network.Socket         (Socket)
 import           Prelude                hiding (drop)
 
+import           P2P.Messages
+
 data ProtocolState = Free
                    | Splitting
                    | Merging
@@ -23,7 +25,7 @@ data ProtocolState = Free
 
 data Node = Node
             { _nodeID    :: ByteString
-            , _location  :: Word8
+            , _location  :: Location
             , _state     :: ProtocolState
             , _otherPeer :: Maybe Peer
             , _cwPeer    :: Maybe Peer
@@ -101,7 +103,10 @@ data Peer = Peer
             { _socket       :: Socket
             , _isReadable   :: Bool
             , _peerLocation :: Word8 }
-            deriving ( Show, Eq )
+            deriving ( Show )
+
+instance Eq Peer where
+    (Peer sock _ loc) == (Peer sock1 _ loc1) = sock == sock1 && loc == loc1
 
 socket :: Lens' Peer Socket
 socket = lens _socket (\record v -> record { _socket = v })
