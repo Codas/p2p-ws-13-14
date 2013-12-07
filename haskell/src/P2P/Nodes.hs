@@ -1,7 +1,7 @@
 module P2P.Nodes where
 
-import           Control.Concurrent.STM (atomically, modifyTVar, newTVarIO,
-                                         readTVarIO)
+import           Control.Concurrent.STM (atomically, modifyTVar', newTVarIO,
+                                         readTVar)
 import           Control.Lens
 import           Control.Monad          (mapM_)
 import           Control.Monad.Loops    (andM)
@@ -86,20 +86,21 @@ newServerID = do
     serverID <- UUID.nextRandom
     return $ drop 10 $ toStrict (UUID.toByteString serverID)
 
-newNodeGenerator :: ByteString -> IO ( IO Node )
+newNodeGenerator :: ByteString -> IO ( Socket -> IO Node )
 newNodeGenerator serverID = do
     initial <- newTVarIO (0 :: Word8)
-    return $ do
-        val <- readTVarIO initial
-        atomically $ modifyTVar initial succ
+    return $ \sock -> do
+        loc <- atomically $ do
+            loc <- readTVar initial
+            modifyTVar' initial succ
+            return loc
+        let peer = Just $ Peer sock True loc
         return Node { _nodeID    = serverID
-                    , _location  = val
-                    , _state     = Free
-                    , _otherPeer = Nothing
-                    , _cwPeer    = Nothing
-                    , _ccwPeer   = Nothing }
-
------------
+                     , _location  = loc
+                      , _state     = Free
+                      , _otherPeer = Nothing
+                      , _cwPeer    = peer
+                      , _ccwPeer   = peer }
 -- Peers --
 -----------
 data Peer = Peer
