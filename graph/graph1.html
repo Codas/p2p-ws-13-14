@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+.link {
+  stroke: #2ca02c;
+  stroke-width: 1.5px;
+}
+
+.link.out {
+  stroke: red;
+  stroke-width: 1.5px;
+}
+
+.link.in {
+  stroke: blue;
+  stroke-width: 1.5px;
+}
+
+#arrow {
+  fill: green;
+}
+
+text {
+  font: 10px sans-serif;
+  pointer-events: none;
+  text-shadow: 0 1px 0 #fff, 1px 0 0 #fff, 0 -1px 0 #fff, -1px 0 0 #fff;
+  fill: #1f77b4;
+}
+
+circle.new {
+  fill: #FF00FF;
+  stroke: #333;
+  stroke-width: 1.5px;
+}
+
+circle {
+  fill: #ff7f0e;
+  stroke: #333;
+  stroke-width: 1.5px;
+}
+
+circle.out {
+  fill: red;
+  stroke: #333;
+  stroke-width: 1.5px;
+}
+
+</style>
+<body>
+<script src="http://d3js.org/d3.v3.min.js"></script>
+<script src="http://code.jquery.com/jquery-1.10.1.min.js"></script>
+<script src="data.js"></script>
+<script>
+	var mode = 1;
+</script>
+<script src="graph.js"></script>
