@@ -7,8 +7,9 @@ import           Data.Word       (Word8)
 import           Network.Socket  (Socket)
 
 data Flags        = Flags { compressed :: Bool } deriving ( Show )
-type Port         = String
 type IP           = String
+type Port         = String
+type NodeID       = ByteString
 type Location     = Word8
 type Content      = Text
 type BinaryStream = ByteString
@@ -28,7 +29,7 @@ data Message = SplitEdgeMessage {address :: IP, port :: Port, srcLoc :: Location
              | RedirectMessage  {address :: IP, port :: Port, trgLoc :: Location}
              | HelloCWMessage   {srcLoc  :: Location, trgLoc :: Location}
              | HelloCCWMessage  {srcLoc  :: Location, trgLoc :: Location}
-             | ContentMessage   {address :: IP, port :: Port, srcLoc :: Location, content :: Content}
+             | ContentMessage   {nodeID  :: NodeID,   srcLoc :: Location, content :: Content}
              | TryLaterMessage
              | CancelMessage
              | Shutdown

@@ -73,7 +73,6 @@ unparseCommand command z =
         Cancel              -> createCommandByteString 6  z
         WithContent         -> createCommandByteString 8  z
 
-
 parseFlags :: W.Word8 -> Flags
 parseFlags byte = Flags { compressed = comp }
     where comp = Bit.testBit byte 2
@@ -122,6 +121,14 @@ parsePort ls = Just(show result, LS.drop 2 ls)
     where firstWord  = fromIntegral (LS.head ls) :: Int
           secondWord = fromIntegral (LS.head $ LS.tail ls) :: Int
           result = firstWord * 256 + secondWord
+
+parseUUID :: LS.ByteString -> Maybe(BS.ByteString, LS.ByteString)
+parseUUID ls = Just (uuid, LS.drop 6 ls)
+    where uuid = BS.take 6 $ LS.toStrict ls
+
+unparseUUID :: Maybe BS.ByteString -> BS.ByteString
+unparseUUID Nothing     = BS.empty
+unparseUUID (Just uuid) = if BS.length uuid == 6 then uuid else BS.empty
 
 unparseLocation :: Maybe Location -> BS.ByteString
 unparseLocation Nothing    = BS.empty

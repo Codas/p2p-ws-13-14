@@ -216,7 +216,7 @@ answer CancelMessage node rSock _
 
 answer (MergeEdgeMessage addr port trgLoc) node rSock _ = undefined
 answer TryLaterMessage node rSock _ = undefined
-answer msg@(ContentMessage _ _ srcLoc content) node rSock _
+answer msg@(ContentMessage _ srcLoc content) node rSock _
     | or $ fmap ((== Just srcLoc) . nodeLocation node) [_ccwPeer, _cwPeer] = do
         print content -- debugging only
         when (cwLoc  == Just srcLoc) $ mapM_ (`sendMessage` newMsg) ccwSocket
