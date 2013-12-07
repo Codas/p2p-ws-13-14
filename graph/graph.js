@@ -105,7 +105,7 @@ var node = svg.append("g").selectAll(".node")
   .data(force.nodes())
   .enter()
   .append("circle")
-  .attr("r", function(d) { return d.newnode?16:8; })
+  .attr("r", function(d) { return d.newnode?10:8; })
   .attr("class", function(d) { return d.newnode?'new':''; })
   .call(force.drag)
   .on("mouseover", function() {
