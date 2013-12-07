@@ -127,7 +127,7 @@ joinCircle nodeGen lSock chansT joinLocation = do
         port       = joinPort joinLocation
         split sock = sendMessage sock splitMsg
         splitMsg   = SplitEdgeMessage "" "" (_location node)
-    connectAndHandleSafe addr port lSock chan split
+    connectAndHandleSafe addr port chan split
     return (node, chan)
 
 newNode :: (Net.Socket -> IO Node) -> Net.Socket -> TVar (Seq.Seq NodeChan) -> IO (Node, NodeChan)
