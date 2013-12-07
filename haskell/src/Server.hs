@@ -2,8 +2,8 @@ module Main where
 
 import           Control.Applicative
 import           Control.Concurrent             (forkIO)
-import           Control.Concurrent.Chan        (Chan, newChan, readChan,
-                                                 writeChan)
+import           Control.Concurrent.Chan        (Chan, dupChan, newChan,
+                                                 readChan, writeChan)
 import           Control.Concurrent.STM         (TVar, atomically, modifyTVar',
                                                  newTVarIO, readTVarIO)
 import           Control.Exception              (SomeException, handle)
@@ -15,8 +15,8 @@ import           Options.Applicative            hiding ((&))
 import           System.Timeout
 
 import qualified Data.ByteString.Lazy           as LS
+import           Data.List
 import           Data.Maybe
-import qualified Data.Sequence                  as Seq
 import qualified Network.Simple.TCP             as Net
 import           Network.Socket                 (ShutdownCmd (ShutdownSend),
                                                  sClose, shutdown)
@@ -81,7 +81,7 @@ hostReader s = return $ Net.Host s
 
 joinReader :: Monad m => String -> m JoinLocation
 joinReader s = return $ JoinLocation addr port
-  where (addr, port) = break (== ':') s
+  where (addr, x:port) = break (== ':') s
 
 data JoinLocation = JoinLocation
                     { joinAddr :: String
@@ -97,8 +97,8 @@ opts = info (serverOpts <**> helper)
 
 type NodeChan = Chan (Message, Net.Socket)
 
-pick :: Seq.Seq a -> IO a
-pick xs =  liftM (Seq.index xs) (randomRIO (0, Seq.length xs - 1))
+pick :: [a] -> IO a
+pick xs =  liftM (xs !!) (randomRIO (0, length xs - 1))
 
 --------------------------------------------------------------
 -- Main server logic. Listen, accept, send events and pring --
@@ -108,35 +108,41 @@ main = Net.withSocketsDo $ do
     options  <- execParser opts
     serverID <- newServerID
     nodeGen  <- newNodeGenerator serverID
-    chansT   <- newTVarIO (Seq.empty :: Seq.Seq NodeChan)
+    chansT   <- newTVarIO ([] :: [NodeChan])
 
     let addr          = opAddress options
         port          = opPort options
         joinLocations = opJoins options
-    Net.listen addr port $ \(lSock, _) -> do
+    Net.listen addr port $ \(lSock, lAddr) -> do
+        putStrLn $ "listening on: " ++ show lAddr
         mapM_ (joinCircle nodeGen lSock chansT) joinLocations
         when (null joinLocations) $ void $ newNode nodeGen lSock chansT
         forever $ Net.acceptFork lSock $ \(rSock, rAddr) -> do
+            putStrLn $ "accepted new connection: " ++ show rAddr
             chans <- readTVarIO chansT
+            putStrLn "picking chans"
+            putStrLn $ "chan size: " ++ (show (length chans))
             chan <- pick chans
+            putStrLn $ "picket chan..?"
             socketToMessages chan rSock
 
 joinCircle nodeGen lSock chansT joinLocation = do
     (node, chan) <- newNode nodeGen lSock chansT
     let addr       = joinAddr joinLocation
         port       = joinPort joinLocation
-        split sock = sendMessage sock splitMsg
-        splitMsg   = SplitEdgeMessage "" "" (_location node)
+        split sock = putStrLn "splitting" >> sendMessage sock splitMsg
+        splitMsg   = SplitEdgeMessage "127.0.0.1" "1337" (_location node)
     connectAndHandleSafe addr port chan split
     return (node, chan)
 
-newNode :: (Net.Socket -> IO Node) -> Net.Socket -> TVar (Seq.Seq NodeChan) -> IO (Node, NodeChan)
+newNode :: (Net.Socket -> IO Node) -> Net.Socket -> TVar ([NodeChan]) -> IO (Node, NodeChan)
 newNode nodeGen lSock chansT = do
     node' <- nodeGen lSock
     chan <- newChan
-    atomically $ modifyTVar' chansT (chan Seq.<|)
+    atomically $ modifyTVar' chansT (chan:)
     let node = node' & cwPeer .~ peer & ccwPeer .~ peer
         peer = Just $ Peer lSock True (_location node')
+    putStrLn $ "created new node: " ++ show node
     forkIO $ handleNode node chan chansT
     return (node, chan)
 
@@ -148,17 +154,18 @@ socketToMessages chan sock = do
 -- Just read every command
 bytesToMessages :: NodeChan -> Net.Socket -> LS.ByteString -> IO ()
 bytesToMessages chan rSock bs
-    | LS.null bs = writeChan chan (Shutdown, rSock)
+    | LS.null bs = writeChan chan (Shutdown, rSock) >> putStrLn "Disconnected"
     | otherwise  =
         case M.byteStringToMessage bs of
             (Just msg, rest) -> do
+                putStrLn $ "new message: " ++ show msg
                 writeChan chan (msg, rSock)
                 bytesToMessages chan rSock rest
             (_, rest) -> bytesToMessages chan rSock rest
 
-handleNode :: Node -> Chan (Message, Net.Socket) -> (TVar (Seq.Seq NodeChan)) -> IO ()
+handleNode :: Node -> Chan (Message, Net.Socket) -> (TVar [NodeChan]) -> IO ()
 handleNode self chan chansT
-    | isDone self = void $ atomically $ modifyTVar' chansT (chan Seq.<|)
+    | isDone self = void $ atomically $ modifyTVar' chansT (delete chan)
     | otherwise = do
         (msg, rSock) <- readChan chan
         answer msg self rSock chan >>= recurse
@@ -266,8 +273,10 @@ connectAndHandleSafe addr port chan action = do
     success <- timeout 2000000 $ takeMVar mvar
     case success of
          Just (Just rSock) -> (action rSock) >> return (Just rSock)
-         _               -> killThread tid >> return Nothing
-  where connect mvar = Net.connect addr port $ \(sock, _) -> do
+         _               -> killThread tid >> putStrLn failedMsg >> return Nothing
+  where failedMsg = "failed to connect to: " ++ addr ++ ":" ++ port
+        connect mvar = Net.connect addr port $ \(sock, rAddr) -> do
+            putStrLn ("connected to" ++ show rAddr)
             putMVar mvar (Just sock)
             socketToMessages chan sock
 
