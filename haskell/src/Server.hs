@@ -4,9 +4,11 @@ import           Control.Applicative
 import           Control.Concurrent             (forkIO)
 import           Control.Concurrent.Chan        (Chan, newChan, readChan,
                                                  writeChan)
+import           Control.Concurrent.STM         (TVar, atomically, modifyTVar',
+                                                 newTVarIO, readTVarIO)
 import           Control.Exception              (SomeException, handle)
-import           Control.Lens
-import           Control.Lens.Setter
+import           Control.Lens                   hiding (argument)
+import           Control.Lens.Setter            hiding (argument)
 import           Control.Monad
 import           Control.Monad.Trans            (liftIO)
 import           Options.Applicative            hiding ((&))
@@ -14,12 +16,14 @@ import           System.Timeout
 
 import qualified Data.ByteString.Lazy           as LS
 import           Data.Maybe
+import qualified Data.Sequence                  as Seq
 import qualified Network.Simple.TCP             as Net
 import           Network.Socket                 (ShutdownCmd (ShutdownSend),
                                                  sClose, shutdown)
 import qualified Network.Socket.ByteString      as BLS
 import qualified Network.Socket.ByteString.Lazy as NLS
 import           Prelude
+import           System.Random                  (randomRIO)
 import qualified Text.Read                      as R
 
 import qualified P2P.Marshalling                as M
@@ -37,10 +41,9 @@ import           Control.Concurrent.MVar        (newEmptyMVar, putMVar,
 data Opts = Opts
   { opPort    :: String
   , opAddress :: Net.HostPreference
-  , opRelay   :: Maybe (Net.HostName, Int)
+  , opJoins   :: [JoinLocation]
   , opConsole :: Bool
-  , opGui     :: Bool
-  , opGuiPort :: Int}
+  , opGui     :: Bool}
   deriving Show
 
 -- define possible command line arguments. Call this programm with --help
@@ -62,14 +65,7 @@ serverOpts = Opts
         <> reader hostReader
         <> showDefaultWith (const "Any address")
         <> help "Address to accept incoming connections from. E.g. localhost.")
-     <*> nullOption
-         ( long "relay"
-        <> short 'r'
-        <> value Nothing
-        <> metavar "RELAY"
-        <> reader relayReader
-        <> showDefault
-        <> help "Relay to connect to.")
+     <*> many (argument joinReader (metavar "TARGET"))
      <*> switch
          ( long "console"
         <> short 'c'
@@ -78,23 +74,19 @@ serverOpts = Opts
          ( long "gui"
         <> short 'g'
         <> help "Enable web based graphical user interface. Binds do port 10000." )
-     <*> nullOption
-         ( long "gport"
-        <> value 10000
-        <> metavar "GUIPORT"
-        <> reader auto
-        <> showDefault
-        <> help "GUI Port.")
 
 -- custom reader to parse the host preferencec
 hostReader :: Monad m => String -> m Net.HostPreference
 hostReader s = return $ Net.Host s
 
-relayReader :: Monad m => String -> m ( Maybe ( Net.HostName, Int ))
-relayReader s = case R.readMaybe (tail i) :: (Maybe Int) of
-    Just int -> return $ Just (string, int)
-    _        -> return Nothing
-  where (string, i) = break (== ':') s
+joinReader :: Monad m => String -> m JoinLocation
+joinReader s = return $ JoinLocation addr port
+  where (addr, port) = break (== ':') s
+
+data JoinLocation = JoinLocation
+                    { joinAddr :: String
+                    , joinPort :: String }
+                    deriving (Show)
 
 -- build the command line options, including helper text and parser
 opts :: ParserInfo Opts
@@ -103,32 +95,58 @@ opts = info (serverOpts <**> helper)
  <> progDesc "Start a TCP server and listen to incomming connections"
  <> header "Server - one Server to bring them all and to the socket bind them" )
 
+type NodeChan = Chan (Message, Net.Socket)
+
+pick :: Seq.Seq a -> IO a
+pick xs =  liftM (Seq.index xs) (randomRIO (0, Seq.length xs - 1))
 
 --------------------------------------------------------------
 -- Main server logic. Listen, accept, send events and pring --
 --------------------------------------------------------------
 main :: IO ()
 main = Net.withSocketsDo $ do
-    options <- execParser opts
-    putStrLn "Awaining your command, master"
+    options  <- execParser opts
     serverID <- newServerID
-    newNode <- newNodeGenerator serverID
-    let address = opAddress options
-        port    = opPort options
-    Net.listen address port $ \(lSock, lAddr) -> do
-        chan <- newChan
-        node <- newNode
-        forkIO $ handleNode node chan lSock
-        forever $ Net.acceptFork lSock $ \(rSock, rAddr) ->  do
+    nodeGen  <- newNodeGenerator serverID
+    chansT   <- newTVarIO (Seq.empty :: Seq.Seq NodeChan)
+
+    let addr          = opAddress options
+        port          = opPort options
+        joinLocations = opJoins options
+    Net.listen addr port $ \(lSock, _) -> do
+        mapM_ (joinCircle nodeGen lSock chansT) joinLocations
+        when (null joinLocations) $ void $ newNode nodeGen lSock chansT
+        forever $ Net.acceptFork lSock $ \(rSock, rAddr) -> do
+            chans <- readTVarIO chansT
+            chan <- pick chans
             socketToMessages chan rSock
 
-socketToMessages :: Chan (Message, Net.Socket) -> Net.Socket -> IO ()
+joinCircle nodeGen lSock chansT joinLocation = do
+    (node, chan) <- newNode nodeGen lSock chansT
+    let addr       = joinAddr joinLocation
+        port       = joinPort joinLocation
+        split sock = sendMessage sock splitMsg
+        splitMsg   = SplitEdgeMessage "" "" (_location node)
+    connectAndHandleSafe addr port lSock chan split
+    return (node, chan)
+
+newNode :: (Net.Socket -> IO Node) -> Net.Socket -> TVar (Seq.Seq NodeChan) -> IO (Node, NodeChan)
+newNode nodeGen lSock chansT = do
+    node' <- nodeGen lSock
+    chan <- newChan
+    atomically $ modifyTVar' chansT (chan Seq.<|)
+    let node = node' & cwPeer .~ peer & ccwPeer .~ peer
+        peer = Just $ Peer lSock True (_location node')
+    forkIO $ handleNode node chan chansT
+    return (node, chan)
+
+socketToMessages :: NodeChan -> Net.Socket -> IO ()
 socketToMessages chan sock = do
     bytes <- NLS.getContents sock
     bytesToMessages chan sock bytes
 
 -- Just read every command
-bytesToMessages :: Chan (Message, Net.Socket) -> Net.Socket -> LS.ByteString -> IO ()
+bytesToMessages :: NodeChan -> Net.Socket -> LS.ByteString -> IO ()
 bytesToMessages chan rSock bs
     | LS.null bs = writeChan chan (Shutdown, rSock)
     | otherwise  =
@@ -138,17 +156,17 @@ bytesToMessages chan rSock bs
                 bytesToMessages chan rSock rest
             (_, rest) -> bytesToMessages chan rSock rest
 
-handleNode :: Node -> Chan (Message, Net.Socket) -> Net.Socket -> IO ()
-handleNode self chan lSock
-    | isDone self = return ()
+handleNode :: Node -> Chan (Message, Net.Socket) -> (TVar (Seq.Seq NodeChan)) -> IO ()
+handleNode self chan chansT
+    | isDone self = void $ atomically $ modifyTVar' chansT (chan Seq.<|)
     | otherwise = do
         (msg, rSock) <- readChan chan
         answer msg self rSock chan >>= recurse
-  where recurse s = handleNode s chan lSock
+  where recurse node = handleNode node chan chansT
 
 -- Some peer just disconnected. Check if it is of intereset for us, conditionally
 -- update the node record, than continue
-answer :: Message -> Node -> Net.Socket -> Chan (Message, Net.Socket) -> IO Node
+answer :: Message -> Node -> Net.Socket -> NodeChan -> IO Node
 answer Shutdown node rSock _
     | _state node == Merging = do
         when (isStarved node) $ forAllSockets_ node sClose
@@ -201,7 +219,7 @@ answer (RedirectMessage addr port trgLoc) node rSock chan
         case status of
             Just pSock -> handleSuccess pSock
             _          -> cancel >> return node
-  where hello       = sendMessage rSock $ HelloCWMessage (_location node) trgLoc
+  where hello sock  = sendMessage sock $ HelloCWMessage (_location node) trgLoc
         cancel      = sendMessage rSock CancelMessage >> close node rSock
         handleSuccess pSock = do
             mapM_ (`shutdown` ShutdownSend) $ maybeToList $ nodeSocket node _ccwPeer
@@ -239,7 +257,7 @@ close node rSock = sClose rSock >> return node
 -- Async safe connections with timeouts --
 ------------------------------------------
 
-connectAndHandleSafe :: String -> String -> Chan (Message, Net.Socket) -> IO () -> IO (Maybe Net.Socket)
+connectAndHandleSafe :: String -> String -> NodeChan -> (Net.Socket -> IO ()) -> IO (Maybe Net.Socket)
 connectAndHandleSafe addr port chan action = do
     mvar <- newEmptyMVar
     let handleError :: SomeException -> IO ()
@@ -247,7 +265,7 @@ connectAndHandleSafe addr port chan action = do
     tid <- forkIO $ handle handleError $ connect mvar
     success <- timeout 2000000 $ takeMVar mvar
     case success of
-         Just (Just rSock) -> action >> return (Just rSock)
+         Just (Just rSock) -> (action rSock) >> return (Just rSock)
          _               -> killThread tid >> return Nothing
   where connect mvar = Net.connect addr port $ \(sock, _) -> do
             putMVar mvar (Just sock)
