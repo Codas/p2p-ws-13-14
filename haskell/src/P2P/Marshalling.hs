@@ -139,10 +139,11 @@ extractContent ls cmd     = if containsContent cmd then (Just content, rest) els
              (content, rest)  = mTuple
 
 createHelloCWMessage :: Maybe Location -> Maybe Location -> Maybe Message
+createHelloCWMessage (Just srcLoc) (Just trgLoc) = Just $ HelloCWMessage srcLoc trgLoc
 createHelloCWMessage _ _ = Nothing
 
 createHelloCCWMessage :: Maybe Location -> Maybe Location -> Maybe Message
-createHelloCCWMessage (Just srcLoc) (Just trgLoc) = Just $ HelloCWMessage srcLoc trgLoc
+createHelloCCWMessage (Just srcLoc) (Just trgLoc) = Just $ HelloCCWMessage srcLoc trgLoc
 createHelloCCWMessage _ _ = Nothing
 
 createContentMessage :: Maybe NodeID -> Maybe Location -> Maybe Content -> Maybe Message
