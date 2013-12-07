@@ -26,7 +26,7 @@ var pool []*Client
 var m = new(sync.RWMutex)
 
 type Client struct {
-	c    *exec.Cmd
+	cmd  *exec.Cmd
 	port int
 
 	in *bufio.Writer
@@ -67,28 +67,32 @@ func startupClient(port int) (c *Client, err error) {
 		port: port,
 	}
 
-	c.c = exec.Command("runhaskell", "Server.hs", "-c", "-p", strconv.Itoa(port))
+	c.cmd = exec.Command("server.exe" /*, "-c", "-p", strconv.Itoa(port)*/)
+	//c.cmd = exec.Command("starter.exe", "-clients", "0")
+	c.cmd.SysProcAttr = &syscall.SysProcAttr{
+		CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP,
+	}
 
-	outPipe, err := c.c.StdoutPipe()
+	outPipe, err := c.cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
 	}
 	go printReader(port, outPipe, os.Stdout)
 
-	inPipe, err := c.c.StdinPipe()
+	inPipe, err := c.cmd.StdinPipe()
 	if err != nil {
 		return nil, err
 	}
 	c.in = bufio.NewWriter(inPipe)
 
-	errPipe, err := c.c.StderrPipe()
+	errPipe, err := c.cmd.StderrPipe()
 	if err != nil {
 		return nil, err
 	}
 	go printReader(port, errPipe, os.Stderr)
 
 	go func() {
-		err := c.c.Run()
+		err := c.cmd.Run()
 		if err != nil {
 			fmt.Printf("#%d Exited..\n", c.port)
 		} else {
@@ -171,8 +175,8 @@ func shutdownClients(num int) {
 
 func shutdownClient(c *Client) {
 	fmt.Printf("#%d Sending Interrupt..\n", c.port)
-	if err := sendInterruptSignal(c.c.Process); err != nil {
-		fmt.Fprintln(os.Stderr, "#%d Error sending signal:", err)
+	if err := sendInterruptSignal(c.cmd.Process); err != nil {
+		fmt.Fprintf(os.Stderr, "#%d Error sending signal: %s\n", c.port, err)
 	}
 }
 
@@ -217,8 +221,11 @@ func sendInterruptSignal(p *os.Process) error {
 		if e != nil {
 			return e
 		}
-		_, _, e = proc.Call(syscall.CTRL_BREAK_EVENT, uintptr(p.Pid))
-		return e
+		r, _, e := proc.Call(syscall.CTRL_BREAK_EVENT, uintptr(p.Pid))
+		if r == 0 {
+			return e
+		}
+		return nil
 	} else {
 		return p.Signal(os.Interrupt)
 	}
