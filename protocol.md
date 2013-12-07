@@ -6,24 +6,18 @@
 | :----------: | :------------------: | :------: | :---------------: |
 | Code & Flags | Address (IPv4)       | Port     | Location          |
 
-**Hello**
+**Hello - Cancel - Try-Later**
 
 | 1 Byte       | 1 Byte            | 1 Byte            |
 | :----------: | :---------------: | :---------------: |
 | Code & Flags | Source Location   | Target Location   |
 
 
-**Cancel - Try-Later**
+**ContentMessage**:
 
-| 1 Byte       | 1 Byte            | 1 Byte            |
-| :----------: | :---------------: | :---------------: |
-| Code & Flags | Source Location   | Target Location   |
-
-**Message**:
-
-| 1 Byte       | 4 Bytes            | 2 Bytes   | 1 Byte               | 1 - 8 Bytes | 1+ Bytes   |
-| :----------: | :----------------: | :-------: | :------------------: | :---------: | :--------: |
-| Code & Flags | Address (Initiator)| Port      | Location (Initiator) | Length      | Message    |
+| 1 Byte       | 6 Bytes            | 1 Byte               | 1 - 8 Bytes | 1+ Bytes   |
+| :----------: | :----------------: | :------------------: | :---------: | :--------: |
+| Code & Flags | NodeID (UUID)      | Location (Initiator) | Length      | Message    |
 
 
 ## Flags
@@ -44,13 +38,6 @@
 | `00101` (5) | Try-Later | Cancel for MergeEdge               |
 | `00110` (6) | Cancel    | Cancel for Redirect                |
 | `01000` (8) | Message   |                                    |
-
-**Direction**:
-
-| Binary  | Direction |
-| :---:   | :---      |
-| `0`     | CW        |
-| `1`     | CCW       |
 
 
 ### Compression (Zip)
