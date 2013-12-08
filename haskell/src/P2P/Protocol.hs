@@ -21,14 +21,13 @@ import           P2P.Messages
 -- Any overflowing data of the ByteString is discarded.
 parseContent :: LS.ByteString -> Maybe (Content, LS.ByteString)
 parseContent bs = case parseBinary bs of
-    Just (binary, rest) -> Just (TE.decodeUtf8 (LS.toStrict binary),rest)
+    Just (binary, rest) -> Just (LS.toStrict binary,rest)
     _           -> Nothing
 
 unparseContent :: Maybe Content -> BS.ByteString
 unparseContent Nothing = BS.empty
-unparseContent (Just message) =  lengthBS `BS.append` messageBS
-    where messageBS  = TE.encodeUtf8 message
-          lengthBS = unparseLength $ BS.length messageBS
+unparseContent (Just message) =  lengthBS `BS.append` message
+    where lengthBS = unparseLength $ BS.length message
 
 parseBinary :: LS.ByteString -> Maybe (LS.ByteString, LS.ByteString)
 parseBinary bs = case parseLength bs of

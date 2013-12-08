@@ -11,7 +11,7 @@ type IP           = String
 type Port         = String
 type NodeID       = ByteString
 type Location     = Word8
-type Content      = Text
+type Content      = ByteString
 type BinaryStream = ByteString
 
 data Command = SplitEdge
