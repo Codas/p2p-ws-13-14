@@ -1,9 +1,12 @@
 module Main where
 
 import           Control.Applicative
-import           Control.Concurrent             (forkIO)
-import           Control.Concurrent.Chan        (Chan, dupChan, newChan,
-                                                 readChan, writeChan)
+import           Control.Concurrent             (forkIO, killThread,
+                                                 threadDelay)
+import           Control.Concurrent.Chan        (Chan, newChan, readChan,
+                                                 writeChan)
+import           Control.Concurrent.MVar        (newEmptyMVar, putMVar,
+                                                 takeMVar)
 import           Control.Concurrent.STM         (TVar, atomically, modifyTVar',
                                                  newTVarIO, readTVarIO)
 import           Control.Exception              (SomeException, handle)
@@ -15,11 +18,13 @@ import           Options.Applicative            hiding ((&))
 import           System.Timeout
 
 import qualified Data.ByteString.Lazy           as LS
+import qualified Data.ByteString.Lazy.Char8     as C8
 import           Data.List
 import           Data.Maybe
 import qualified Network.Simple.TCP             as Net
-import           Network.Socket                 (ShutdownCmd (ShutdownSend),
-                                                 sClose, shutdown)
+import           Network.Socket                 (ShutdownCmd (ShutdownSend, ShutdownReceive),
+                                                 sClose, send, shutdown)
+import qualified Network.Socket                 as Sock
 import qualified Network.Socket.ByteString      as BLS
 import qualified Network.Socket.ByteString.Lazy as NLS
 import           Prelude
@@ -31,9 +36,6 @@ import           P2P.Messages
 import           P2P.Nodes
 
 
-import           Control.Concurrent             (killThread, threadDelay)
-import           Control.Concurrent.MVar        (newEmptyMVar, putMVar,
-                                                 takeMVar)
 
 -----------------------------------
 -- Command line argument parsing --
@@ -103,6 +105,17 @@ pick xs =  liftM (xs !!) (randomRIO (0, length xs - 1))
 --------------------------------------------------------------
 -- Main server logic. Listen, accept, send events and pring --
 --------------------------------------------------------------
+
+-- listen addr port action = do
+--     addrinfos <- Sock.getAddrInfo
+--                  (Just (Sock.defaultHints {Sock.addrFlags = [Sock.AI_PASSIVE]}))
+--                  (Just addr) (Just port)
+--     let serveraddr = head addrinfos
+--     sock <- Sock.socket (Sock.addrFamily serveraddr) Sock.Stream Sock.defaultProtocol
+--     Sock.bindSocket sock (Sock.addrAddress serveraddr)
+--     Sock.listen sock 1
+--     (conn, _) <- Sock.accept sock
+
 main :: IO ()
 main = Net.withSocketsDo $ do
     options  <- execParser opts
@@ -114,58 +127,65 @@ main = Net.withSocketsDo $ do
         port          = opPort options
         joinLocations = opJoins options
     Net.listen addr port $ \(lSock, lAddr) -> do
-        putStrLn $ "listening on: " ++ show lAddr
-        mapM_ (joinCircle nodeGen lSock chansT) joinLocations
+        putStrLn $ "[Conn] listening on: " ++ show lAddr
+        mapM_ (joinCircle nodeGen lSock chansT port) joinLocations
         when (null joinLocations) $ void $ newNode nodeGen lSock chansT
         forever $ Net.acceptFork lSock $ \(rSock, rAddr) -> do
-            putStrLn $ "accepted new connection: " ++ show rAddr
+            putStrLn $ "[Conn] accepted new connection: " ++ show rAddr
             chans <- readTVarIO chansT
-            putStrLn "picking chans"
-            putStrLn $ "chan size: " ++ (show (length chans))
             chan <- pick chans
-            putStrLn $ "picket chan..?"
             socketToMessages chan rSock
 
-joinCircle nodeGen lSock chansT joinLocation = do
+joinCircle nodeGen lSock chansT port joinLocation = do
     (node, chan) <- newNode nodeGen lSock chansT
-    let addr       = joinAddr joinLocation
-        port       = joinPort joinLocation
-        split sock = putStrLn "splitting" >> sendMessage sock splitMsg
-        splitMsg   = SplitEdgeMessage "127.0.0.1" "1337" (_location node)
-    connectAndHandleSafe addr port chan split
+    let jAddr      = joinAddr joinLocation
+        jPort      = joinPort joinLocation
+        split sock = putStrLn "[Action] Splitting initiated" >> sendMessage sock splitMsg
+        splitMsg   = SplitEdgeMessage "127.0.0.1" port (_location node)
+    connectAndHandleSafe jAddr jPort chan split
     return (node, chan)
 
-newNode :: (Net.Socket -> IO Node) -> Net.Socket -> TVar ([NodeChan]) -> IO (Node, NodeChan)
+newNode :: IO Node -> Net.Socket -> TVar ([NodeChan]) -> IO (Node, NodeChan)
 newNode nodeGen lSock chansT = do
-    node' <- nodeGen lSock
+    node <- nodeGen
     chan <- newChan
     atomically $ modifyTVar' chansT (chan:)
-    let node = node' & cwPeer .~ peer & ccwPeer .~ peer
-        peer = Just $ Peer lSock True (_location node')
-    putStrLn $ "created new node: " ++ show node
+    putStrLn $ "[State] created new node: " ++ show node
     forkIO $ handleNode node chan chansT
     return (node, chan)
 
 socketToMessages :: NodeChan -> Net.Socket -> IO ()
 socketToMessages chan sock = do
-    bytes <- NLS.getContents sock
-    bytesToMessages chan sock bytes
+    handle handleError $ convert
+    putStrLn "[Conn State] DONE!"
+  where handleError :: SomeException -> IO ()
+        handleError e = do
+            putStrLn $ "[Exception] " ++ show e
+            putStrLn $ "[Exception] Socket: " ++ show sock
+            writeChan chan (Shutdown, sock)
+        convert = do
+            bytes <- NLS.getContents sock
+            bytesToMessages chan sock bytes
 
 -- Just read every command
 bytesToMessages :: NodeChan -> Net.Socket -> LS.ByteString -> IO ()
 bytesToMessages chan rSock bs
-    | LS.null bs = writeChan chan (Shutdown, rSock) >> putStrLn "Disconnected"
+    | LS.null bs = putStrLn "[Conn] Disconnected" >> writeChan chan (Shutdown, rSock)
     | otherwise  =
         case M.byteStringToMessage bs of
             (Just msg, rest) -> do
-                putStrLn $ "new message: " ++ show msg
+                putStrLn $ "[Message] new message: " ++ show msg
                 writeChan chan (msg, rSock)
                 bytesToMessages chan rSock rest
-            (_, rest) -> bytesToMessages chan rSock rest
+            (_, rest) ->
+                putStrLn "[Message] got 'something'..." >>
+                print (C8.unpack rest) >>
+                bytesToMessages chan rSock rest
 
-handleNode :: Node -> Chan (Message, Net.Socket) -> (TVar [NodeChan]) -> IO ()
+handleNode :: Node -> Chan (Message, Net.Socket) -> TVar [NodeChan] -> IO ()
 handleNode self chan chansT
-    | isDone self = void $ atomically $ modifyTVar' chansT (delete chan)
+    | isDone self = putStrLn "[State] Node done!" >>
+                    (atomically $ modifyTVar' chansT (delete chan))
     | otherwise = do
         (msg, rSock) <- readChan chan
         answer msg self rSock chan >>= recurse
@@ -176,12 +196,14 @@ handleNode self chan chansT
 answer :: Message -> Node -> Net.Socket -> NodeChan -> IO Node
 answer Shutdown node rSock _
     | _state node == Merging = do
+        putStrLn $ "[Handling] Shutdown. Merging -> Done. " ++ show rSock
         when (isStarved node) $ forAllSockets_ node sClose
         sClose rSock >> return (deletePeer node rSock & protocolState .~ Done)
     | _state node == Splitting = do
-        sClose rSock
-        return (deletePeer node rSock & cwPeer .~ _otherPeer node & protocolState .~ Free)
-    | otherwise = sClose rSock >> return (deletePeer node rSock)
+        putStrLn $ "[Handling] Shutdown. Splitting -> Close. " ++ show rSock
+        return $ node & otherPeer .~ Nothing & cwPeer .~ (_otherPeer node) & protocolState .~ Free
+    | otherwise = (putStrLn $ "[Handling] Shutdown. Closing. " ++ show rSock) >>
+                  sClose rSock >> return (deletePeer node rSock)
   where deletePeer :: Node -> Net.Socket -> Node
         deletePeer node peer
             | nodeSocket node _cwPeer    == Just peer = node & cwPeer    .~ Nothing
@@ -189,39 +211,56 @@ answer Shutdown node rSock _
             | nodeSocket node _otherPeer == Just peer = node & otherPeer .~ Nothing
             | otherwise                               = node
 
-answer (SplitEdgeMessage rAddr rPort rLoc) node rSock _
-    | isBusy node              = close node rSock
-    | isJust (_otherPeer node) = close node rSock
-    | isNothing (_cwPeer node) = close node rSock
+answer (SplitEdgeMessage rAddr rPort rLoc) node rSock chan
+    | isBusy node              = putStrLn "[Handling] SplitEdge. Is Busy!" >>
+                                 close node rSock
+    | isJust (_otherPeer node) = putStrLn "[Handling] SplitEdge. Has other Peer!" >>
+                                 close node rSock
+    | isNothing (_cwPeer node) = do
+        putStrLn "[Handling] SplitEdge. No Peers."
+        sendMessage rSock helloCCW
+        sendMessage rSock helloCW
+        return $ node & cwPeer .~ newPeer & ccwPeer .~ newPeer
     | otherwise = do
-        _ <- forkIO $ sendMessage rSock hello
+        putStrLn "[Handling] SplitEdge. Normal Operation."
+        _ <- forkIO $ sendMessage rSock helloCCW
         _ <- forkIO $ sendMessage (_socket (fromJust (_cwPeer node))) redirect
-        return $ node & otherPeer .~ newPeer & protocolState .~ Splitting
-  where lLoc     = _location node
-        newPeer  = Just $ Peer rSock True rLoc
-        hello    = HelloCCWMessage lLoc rLoc
-        redirect = RedirectMessage rAddr rPort lLoc
+        return $ newNode
+  where lLoc         = _location node
+        newNode      = node & otherPeer .~ newPeer & protocolState .~ Splitting
+        helloCCW     = HelloCCWMessage lLoc rLoc
+        helloCW      = HelloCWMessage lLoc rLoc
+        redirect     = RedirectMessage rAddr rPort rLoc
+        newPeer      = Just $ Peer rSock True rLoc
 
 
 answer (HelloCCWMessage srcLoc trgLoc) node rSock _
-    | trgLoc /= _location node                         = close node rSock
-    | Just (Peer rSock True srcLoc) /= _otherPeer node = close node rSock
-    | otherwise = return $ node & ccwPeer .~ (_otherPeer node) & otherPeer .~ Nothing
+    | trgLoc /= _location node = putStrLn "[Handling] HelloCCW. Location mismatch (CCW)." >>
+                                 close node rSock
+    | otherwise = putStrLn "[Handling] HelloCCW. All good." >>
+                  return newNode
+  where newNode = node & ccwPeer .~ peer & otherPeer .~ Nothing
+        peer = Just $ Peer rSock True srcLoc
 
 -- HelloCW always denotes the end of the protocol (end of a join), so we
 -- can set the new peers and mark the node (ourselfes) as Free.
 -- We have now successfully joined the network!
 answer (HelloCWMessage srcLoc trgLoc) node rSock _
-    | trgLoc /= _location node                         = close node rSock
-    | Just (Peer rSock True srcLoc) /= _otherPeer node = close node rSock
-    | otherwise = return $ newNode & protocolState .~ Free
-  where newNode = node & cwPeer .~ (_otherPeer node) & otherPeer .~ Nothing
+    | trgLoc /= _location node = putStrLn "[Handling] HelloCW. Location mismatch." >>
+                                 close node rSock
+    | otherwise = putStrLn "[Handling] HelloCW. All good." >>
+                  return (newNode & protocolState .~ Free)
+  where newNode = node & cwPeer .~ peer & otherPeer .~ Nothing
+        peer = Just $ Peer rSock True srcLoc
 
 answer (RedirectMessage addr port trgLoc) node rSock chan
-    | isBusy node                                = cancel
-    | trgLoc /= _location node                   = cancel
-    | Just rSock /= fmap _socket (_ccwPeer node) = cancel
+    | isBusy node                                = putStrLn "[Handling] Redirect. Is Busy. Canceling." >>
+                                                   cancel
+    | Just rSock /= fmap _socket (_ccwPeer node) = putStrLn ("[Handling] Redircet. Invalid peer!. Canceling.") >>
+                                                   cancel
     | otherwise = do
+        putStrLn "[Handling] Redirect. All good"
+        putStrLn "greeting new cw"
         status <- connectAndHandleSafe addr port chan hello
         case status of
             Just pSock -> handleSuccess pSock
@@ -229,13 +268,17 @@ answer (RedirectMessage addr port trgLoc) node rSock chan
   where hello sock  = sendMessage sock $ HelloCWMessage (_location node) trgLoc
         cancel      = sendMessage rSock CancelMessage >> close node rSock
         handleSuccess pSock = do
-            mapM_ (`shutdown` ShutdownSend) $ maybeToList $ nodeSocket node _ccwPeer
+            putStrLn "shutting down connection do ccw peer"
+            mapM_ sClose $ maybeToList $ nodeSocket node _ccwPeer
             return $ node & otherPeer .~ _ccwPeer node & ccwPeer .~ Just newPeer
           where newPeer = Peer pSock True trgLoc
 
 answer CancelMessage node rSock _
-    | nodeSocket node _otherPeer /= Just rSock = return node
+    | nodeSocket node _cwPeer /= Just rSock = putStrLn "[Handling] Cancel. Doing nothing." >>
+                                              return node
     | otherwise = do
+        putStrLn $ "[Handling] Cancel. All good. Shutting down Send. " ++ show rSock
+        print node
         mapM_ (`shutdown` ShutdownSend) $ maybeToList $ nodeSocket node _otherPeer
         return $ node & otherPeer .~ Nothing
 
@@ -243,11 +286,13 @@ answer (MergeEdgeMessage addr port trgLoc) node rSock _ = undefined
 answer TryLaterMessage node rSock _ = undefined
 answer msg@(ContentMessage _ srcLoc content) node rSock _
     | or $ fmap ((== Just srcLoc) . nodeLocation node) [_ccwPeer, _cwPeer] = do
+        putStrLn "[Handling] Content. All Good."
         print content -- debugging only
         when (cwLoc  == Just srcLoc) $ mapM_ (`sendMessage` newMsg) ccwSocket
         when (ccwLoc == Just srcLoc) $ mapM_ (`sendMessage` newMsg) cwSocket
         return node
-    | otherwise = return node
+    | otherwise = putStrLn "[Handling] Content. Invalid Peer." >>
+                  return node
   where cwLoc     = nodeLocation node _cwPeer
         ccwLoc    = nodeLocation node _ccwPeer
         cwSocket  = maybeToList $ nodeSocket node _cwPeer
@@ -255,10 +300,12 @@ answer msg@(ContentMessage _ srcLoc content) node rSock _
         newMsg    = msg & _srcLoc .~ (_location node)
 
 sendMessage :: Net.Socket -> Message -> IO ()
-sendMessage rSock msg = BLS.sendAll rSock $ M.messageToByteString msg
+sendMessage rSock msg = (putStrLn $ "[Action] Sending Message: " ++ show msg) >>
+                        (BLS.sendAll rSock $ M.messageToByteString msg)
 
 close :: Node -> Net.Socket -> IO Node
-close node rSock = sClose rSock >> return node
+close node rSock = (putStrLn $ "[Action] Close! " ++ show rSock) >>
+                   sClose rSock >> return node
 
 ------------------------------------------
 -- Async safe connections with timeouts --
@@ -276,7 +323,7 @@ connectAndHandleSafe addr port chan action = do
          _               -> killThread tid >> putStrLn failedMsg >> return Nothing
   where failedMsg = "failed to connect to: " ++ addr ++ ":" ++ port
         connect mvar = Net.connect addr port $ \(sock, rAddr) -> do
-            putStrLn ("connected to" ++ show rAddr)
+            putStrLn ("connected to: " ++ show rAddr)
             putMVar mvar (Just sock)
             socketToMessages chan sock
 
