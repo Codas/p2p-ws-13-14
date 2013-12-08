@@ -282,11 +282,11 @@ answer (HelloCWMessage srcLoc trgLoc) node rSock _ _
 answer (RedirectMessage addr port trgLoc) node rSock chan cMsgT
     | isBusy node                                = putStrLn "[Handling] Redirect. Is Busy. Canceling." >>
                                                    cancel
-    | Just rSock /= fmap _socket (_ccwPeer node) = putStrLn "[Handling] Redircet. Invalid peer!. Canceling." >>
+    | Just rSock /= fmap _socket (_ccwPeer node) = putStrLn "[Handling] Redirect. Invalid peer!. Canceling." >>
                                                    cancel
     | otherwise = do
         putStrLn "[Handling] Redirect. All good"
-        putStrLn "greeting new cw"
+        putStrLn "greeting new ccw"
         status <- connectAndHandleSafe addr port chan cMsgT hello
         case status of
             Just pSock -> handleSuccess pSock
@@ -294,7 +294,7 @@ answer (RedirectMessage addr port trgLoc) node rSock chan cMsgT
   where hello sock  = sendMessage sock $ HelloCWMessage (_location node) trgLoc
         cancel      = sendMessage rSock CancelMessage >> close node rSock
         handleSuccess pSock = do
-            putStrLn "[Action] shutting down connection do ccw peer"
+            putStrLn "[Action] shutting down connection to old ccw peer"
             mapM_ sClose $ maybeToList $ nodeSocket node _ccwPeer
             return $ node & otherPeer .~ _ccwPeer node & ccwPeer .~ Just newPeer
           where newPeer = Peer pSock True trgLoc
@@ -308,7 +308,26 @@ answer CancelMessage node rSock _ _
         mapM_ (`shutdown` ShutdownSend) $ maybeToList $ nodeSocket node _otherPeer
         return $ node & otherPeer .~ Nothing
 
-answer (MergeEdgeMessage addr port trgLoc) node rSock _ _ = return node
+answer (MergeEdgeMessage addr port trgLoc) node rSock chan cMsgT
+    | isBusy node                                = putStrLn "[Handling] MergeEdge. Is Busy. TryLater." >>
+                                                   cancel >> return node
+    | Just rSock /= fmap _socket (_cwPeer node)  = putStrLn "[Handling] MergeEdge. Invalid peer!. Canceling." >>
+                                                   cancel >> return node
+    | otherwise = do
+        putStrLn "[Handling] MergeEdge. All good"
+        putStrLn "greeting new cw"
+        status <- connectAndHandleSafe addr port chan cMsgT hello
+        case status of
+            Just pSock -> handleSuccess pSock
+            _          -> cancel >> return node
+  where hello sock = sendMessage sock $ HelloCCWMessage (_location node) trgLoc
+        cancel     = sendMessage rSock (TryLaterMessage)
+        handleSuccess pSock = do
+            putStrLn "[Action] shutting down connection to old cw peer"
+            mapM_ sClose $ maybeToList $ nodeSocket node _cwPeer
+            return $ node & otherPeer .~ _cwPeer node & cwPeer .~ Just newPeer
+          where newPeer = Peer pSock True trgLoc
+
 answer TryLaterMessage node rSock _ _ = return node
 answer msg@(ContentMessage srcNodeID srcLoc content) node _ _ _
     | or $ fmap ((== Just srcLoc) . nodeLocation node) [_ccwPeer, _cwPeer] = do
