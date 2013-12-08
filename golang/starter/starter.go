@@ -17,9 +17,10 @@ import (
 )
 
 var (
-	port      = flag.Int("startport", 11000, "first port of a range, where clients listen on")
-	clients   = flag.Int("clients", 10, "Number of clients to start")
-	locations = flag.Int("locations", 3, "Number of locations per client in ring")
+	port       = flag.Int("p", 11000, "first port of a range, where clients listen on")
+	clients    = flag.Int("c", 3, "Number of clients to start")
+	locations  = flag.Int("l", 3, "Number of locations per client in ring")
+	executable = flag.String("x", "server.exe", "Executable file that starts a peer")
 )
 
 var pool []*Client
@@ -61,14 +62,21 @@ func startupClients(clients, locations int) {
 }
 
 func startupClient(port int) (c *Client, err error) {
-	fmt.Printf("#%d Starting..\n", port)
-
 	c = &Client{
 		port: port,
 	}
 
-	c.cmd = exec.Command("server.exe" /*, "-c", "-p", strconv.Itoa(port)*/)
-	//c.cmd = exec.Command("starter.exe", "-clients", "0")
+	m.RLock()
+	arguments := []string{"-p", strconv.Itoa(port)}
+	if len(pool) > 0 {
+		for i := 0; i < *locations; i++ {
+			p := pool[rand.Intn(len(pool))]
+			arguments = append(arguments, "127.0.0.1:"+strconv.Itoa(p.port))
+		}
+	}
+	m.RUnlock()
+	fmt.Printf("#%d Starting [%s %v] ..\n", port, *executable, arguments)
+	c.cmd = exec.Command(*executable, arguments...)
 	c.cmd.SysProcAttr = &syscall.SysProcAttr{
 		CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP,
 	}
