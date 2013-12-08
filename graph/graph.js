@@ -1,4 +1,4 @@
-var linkDistance = 20,
+var linkDistance = 5,
 	nodename = 'uid';
 
 var links = [],
@@ -59,7 +59,7 @@ else {
 	nodename = 'location';
 }
 	
-var width = 1500,
+var width = 1600,
     height = 1000;
 
 var color = d3.scale.category10();
@@ -105,7 +105,7 @@ var node = svg.append("g").selectAll(".node")
   .data(force.nodes())
   .enter()
   .append("circle")
-  .attr("r", function(d) { return d.newnode?10:8; })
+  .attr("r", function(d) { return d.newnode?10:2; })
   .attr("class", function(d) { return d.newnode?'new':''; })
   .call(force.drag)
   .on("mouseover", function() {
@@ -132,7 +132,7 @@ var node = svg.append("g").selectAll(".node")
 
 
 var text = svg.append("g").selectAll("text")
-    .data(force.nodes())
+    .data(force.nodes().filter(function(d) { return d.newnode}))
 	.enter().append("text")
     .attr("x", 8)
     .attr("y", ".31em")
