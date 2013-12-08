@@ -17,8 +17,9 @@ import (
 var (
 	port       = flag.Int("p", 11000, "first port of a range, where clients listen on")
 	clients    = flag.Int("c", 3, "Number of clients to start")
-	locations  = flag.Int("l", 3, "Number of locations per client in ring")
+	locations  = flag.Int("l", 1, "Number of locations per client in ring")
 	executable = flag.String("x", "server.exe", "Executable file that starts a peer")
+	braodcast  = flag.Bool("b", false, "Let first Peer execute a broadcast")
 )
 
 var pool []*Client
@@ -55,7 +56,7 @@ func main() {
 
 func startupClients(clients, locations int) {
 	for i := 0; i < clients; i++ {
-		c, err := startupClient(*port, i == 0)
+		c, err := startupClient(*port, *braodcast && i == 0)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "Error during client startup:", err)
 			continue
