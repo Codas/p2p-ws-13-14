@@ -59,8 +59,8 @@ isStarved node = and $ forAllPeers node _isReadable
 nodeSocket :: Node -> (Node -> Maybe Peer) -> Maybe Socket
 nodeSocket node getter = fmap _socket (getter node)
 
-nodeHandle :: Node -> (Node -> Maybe Peer) -> Maybe Handle
-nodeHandle node getter = fmap _handle (getter node)
+-- nodeHandle :: Node -> (Node -> Maybe Peer) -> Maybe Handle
+-- nodeHandle node getter = fmap _handle (getter node)
 
 nodeLocation :: Node -> (Node -> Maybe Peer) -> Maybe Location
 nodeLocation node getter = fmap _peerLocation (getter node)
@@ -110,20 +110,19 @@ newNodeGenerator serverID = do
 -- Peers --
 -----------
 data Peer = Peer
-            { _handle       :: Handle
-            , _socket       :: Socket
+            { _socket       :: Socket
             , _isReadable   :: Bool
             , _peerLocation :: Word8 }
 
 instance Show Peer where
-    show (Peer _ _ _ loc) = show loc
+    show (Peer _ _ loc) = show loc
 
 
 instance Eq Peer where
-    (Peer _ sock _ loc) == (Peer _ sock1 _ loc1) = sock == sock1 && loc == loc1
+    (Peer sock _ loc) == (Peer sock1 _ loc1) = sock == sock1 && loc == loc1
 
 socket :: Lens' Peer Socket
 socket = lens _socket (\record v -> record { _socket = v })
 
-pHandle :: Lens' Peer Handle
-pHandle = lens _handle (\record v -> record { _handle = v })
+-- pHandle :: Lens' Peer Handle
+-- pHandle = lens _handle (\record v -> record { _handle = v })
