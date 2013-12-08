@@ -23,6 +23,8 @@ var (
 
 var pool []*Client
 var m = new(sync.RWMutex)
+var shuttingDown = false
+var done = make(chan bool)
 
 type Client struct {
 	cmd  *exec.Cmd
@@ -42,6 +44,13 @@ func main() {
 
 	startupClients(*clients, *locations)
 	parseStdIO()
+
+	// shut down
+	m.Lock()
+	shuttingDown = true
+	m.Unlock()
+	shutdownClients(-1)
+	<-done
 }
 
 func startupClients(clients, locations int) {
@@ -145,7 +154,6 @@ func parseStdIO() {
 		} else {
 			switch text {
 			case "q":
-				shutdownClients(-1)
 				return
 			case "l":
 				listClients()
@@ -195,6 +203,9 @@ func removeClient(c *Client) {
 			pool[i] = pool[len(pool)-1]
 			pool = pool[:len(pool)-1]
 		}
+	}
+	if shuttingDown && len(pool) == 0 {
+		done <- true
 	}
 }
 
