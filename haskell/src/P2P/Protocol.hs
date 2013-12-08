@@ -124,7 +124,7 @@ parsePort ls = Just(show result, LS.drop 2 ls)
 
 parseUUID :: LS.ByteString -> Maybe(BS.ByteString, LS.ByteString)
 parseUUID ls = Just (uuid, LS.drop 6 ls)
-    where uuid = BS.take 6 $ LS.toStrict ls
+    where uuid = LS.toStrict $ LS.take 6 ls
 
 unparseUUID :: Maybe BS.ByteString -> BS.ByteString
 unparseUUID Nothing     = BS.empty
