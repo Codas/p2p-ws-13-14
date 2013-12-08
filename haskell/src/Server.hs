@@ -119,7 +119,7 @@ main = Net.withSocketsDo $ do
     chansT   <- newTVarIO ([] :: [(Location, NodeChan)])
     cMsgsT   <- newTVarIO ([] :: [(NodeID, Location)])
 
-    forkIO $ handleInterrupt $ forever $ Sig.getInputLine ""
+    -- forkIO $ handleInterrupt $ forever $ Sig.getInputLine ""
 
     let addr          = opAddress options
         port          = opPort options
