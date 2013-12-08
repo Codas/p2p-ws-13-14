@@ -33,6 +33,7 @@ data Message = SplitEdgeMessage {address :: IP, port :: Port, srcLoc :: Location
              | TryLaterMessage
              | CancelMessage
              | Shutdown
+             | SendContentMessage {nodeID  :: NodeID, content :: Content}
              deriving (Show, Eq)
 
 _srcLoc :: Lens' Message Location

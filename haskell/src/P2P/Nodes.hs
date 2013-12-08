@@ -24,7 +24,7 @@ data ProtocolState = Free
                      deriving (Show, Eq)
 
 data Node = Node
-            { _nodeID    :: ByteString
+            { _nodeID    :: NodeID
             , _location  :: Location
             , _state     :: ProtocolState
             , _otherPeer :: Maybe Peer
@@ -86,21 +86,20 @@ newServerID = do
     serverID <- UUID.nextRandom
     return $ drop 10 $ toStrict (UUID.toByteString serverID)
 
-newNodeGenerator :: ByteString -> IO ( Socket -> IO Node )
+newNodeGenerator :: ByteString -> IO ( IO Node )
 newNodeGenerator serverID = do
     initial <- newTVarIO (0 :: Word8)
-    return $ \sock -> do
+    return $ do
         loc <- atomically $ do
             loc <- readTVar initial
             modifyTVar' initial succ
             return loc
-        let peer = Just $ Peer sock True loc
         return Node { _nodeID    = serverID
                      , _location  = loc
                       , _state     = Free
                       , _otherPeer = Nothing
-                      , _cwPeer    = peer
-                      , _ccwPeer   = peer }
+                      , _cwPeer    = Nothing
+                      , _ccwPeer   = Nothing }
 -- Peers --
 -----------
 data Peer = Peer
