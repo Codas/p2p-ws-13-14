@@ -24,7 +24,7 @@ data ProtocolState = Free
                      deriving (Show, Eq)
 
 data Node = Node
-            { _nodeID    :: ByteString
+            { _nodeID    :: NodeID
             , _location  :: Location
             , _state     :: ProtocolState
             , _otherPeer :: Maybe Peer
