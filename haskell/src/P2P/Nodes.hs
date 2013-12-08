@@ -12,8 +12,8 @@ import           Data.Maybe             (catMaybes)
 import qualified Data.UUID              as UUID
 import qualified Data.UUID.V4           as UUID
 import           Data.Word              (Word8)
-import           Network.Socket         (Socket)
 import           Prelude                hiding (drop)
+import           System.IO              (Handle)
 
 import           System.Random          (randomRIO)
 
@@ -55,7 +55,7 @@ protocolState = lens _state (\record v -> record { _state = v })
 isStarved :: Node -> Bool
 isStarved node = and $ forAllPeers node _isReadable
 
-nodeSocket :: Node -> (Node -> Maybe Peer) -> Maybe Socket
+nodeSocket :: Node -> (Node -> Maybe Peer) -> Maybe Handle
 nodeSocket node getter = fmap _socket (getter node)
 
 nodeLocation :: Node -> (Node -> Maybe Peer) -> Maybe Location
@@ -77,7 +77,7 @@ isDone node = _state node == Done
 forAllPeers :: Node -> (Peer -> b) -> [b]
 forAllPeers node fn = fmap fn $ catMaybes [_cwPeer node, _ccwPeer node]
 
-forAllSockets_ :: Monad m => Node -> (Socket -> m b) -> m ()
+forAllSockets_ :: Monad m => Node -> (Handle -> m b) -> m ()
 forAllSockets_ node fn = mapM_ fn $ catMaybes $ fmap (nodeSocket node) [_cwPeer, _ccwPeer]
 
 --------------------
@@ -106,13 +106,16 @@ newNodeGenerator serverID = do
 -- Peers --
 -----------
 data Peer = Peer
-            { _socket       :: Socket
+            { _socket       :: Handle
             , _isReadable   :: Bool
             , _peerLocation :: Word8 }
-            deriving ( Show )
+
+instance Show Peer where
+    show (Peer _ _ loc) = show loc
+
 
 instance Eq Peer where
     (Peer sock _ loc) == (Peer sock1 _ loc1) = sock == sock1 && loc == loc1
 
-socket :: Lens' Peer Socket
+socket :: Lens' Peer Handle
 socket = lens _socket (\record v -> record { _socket = v })
