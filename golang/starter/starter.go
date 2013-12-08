@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 )
 
 var (
@@ -77,8 +76,8 @@ func startupClient(port int) (c *Client, err error) {
 	m.RUnlock()
 	fmt.Printf("#%d Starting [%s %v] ..\n", port, *executable, arguments)
 	c.cmd = exec.Command(*executable, arguments...)
-	c.cmd.SysProcAttr = &syscall.SysProcAttr{
-		CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP,
+	if runtime.GOOS == "windows" {
+		c.cmd.SysProcAttr = procAttrWindows()
 	}
 
 	outPipe, err := c.cmd.StdoutPipe()
@@ -221,19 +220,7 @@ func listClients() {
 func sendInterruptSignal(p *os.Process) error {
 	// danke windows für die extra wurst
 	if runtime.GOOS == "windows" {
-		d, e := syscall.LoadDLL("kernel32.dll")
-		if e != nil {
-			return e
-		}
-		proc, e := d.FindProc("GenerateConsoleCtrlEvent")
-		if e != nil {
-			return e
-		}
-		r, _, e := proc.Call(syscall.CTRL_BREAK_EVENT, uintptr(p.Pid))
-		if r == 0 {
-			return e
-		}
-		return nil
+		return sendInterruptSignalWindows(p)
 	} else {
 		return p.Signal(os.Interrupt)
 	}
