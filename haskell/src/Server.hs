@@ -164,13 +164,13 @@ newNode nodeGen chansT = do
     return (node, chan)
 
 sendContentMessages :: NodeID -> Socket -> TVar [(Location, NodeChan)] -> IO ()
-sendContentMessages serverID acc chansT = do
+sendContentMessages serverID sock chansT = do
     chans <- readTVarIO chansT
     (_, chan) <- pick chans
-    threadDelay 5000000
-    writeChan chan (SendContentMessage serverID (C8.pack "hallo leute!"), acc)
-    threadDelay 2000000
-    -- unless (null chans) $ sendContentMessages serverID lSock chansT
+    threadDelay 1000000
+    writeChan chan (SendContentMessage serverID (C8.pack "hallo leute!"), sock)
+    -- threadDelay 2000000
+    unless (null chans) $ sendContentMessages serverID sock chansT
     return ()
 
 socketToMessages :: (Location, NodeChan) -> Socket
@@ -348,7 +348,6 @@ answer msg@(ContentMessage srcNodeID srcLoc content) node _ _ = do
    putStrLn "[Handling] Content. All Good."
    putStrLn $ "[CONTENT] " ++ show content -- debugging only
    when ((nodeID, loc) /= (srcNodeID, srcLoc)) $ do
-       threadDelay 1000000
        putStrLn $ "[Handling] Forwarding content message. To cw peer: " ++ show (_cwPeer node)
        mapM_ (`sendMessage` msg) cwSocket
        return ()
