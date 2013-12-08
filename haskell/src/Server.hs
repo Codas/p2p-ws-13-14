@@ -33,6 +33,9 @@ import           System.IO
 import           System.Random                  (randomRIO)
 import qualified Text.Read                      as R
 
+import qualified System.Console.Haskeline       as Sig
+import           System.Exit                    (exitFailure)
+
 import qualified P2P.Marshalling                as M
 import           P2P.Messages
 import           P2P.Nodes
@@ -117,6 +120,9 @@ main = Net.withSocketsDo $ do
     chansT   <- newTVarIO ([] :: [(Location, NodeChan)])
     cMsgsT   <- newTVarIO ([] :: [(NodeID, Location)])
 
+    forkIO $ Sig.runInputT Sig.defaultSettings $ Sig.withInterrupt $ interruptHandler
+
+
     let addr          = opAddress options
         port          = opPort options
         joinLocations = opJoins options
@@ -129,6 +135,22 @@ main = Net.withSocketsDo $ do
             chans <- readTVarIO chansT
             chan <- pick chans
             socketToMessages chan rSock cMsgsT
+
+data Signal = Continue | Interrupt
+
+interruptHandler :: Sig.InputT IO ()
+interruptHandler = do
+    t <- Sig.handleInterrupt (return (Interrupt)) $ do
+        Sig.getInputLine ""
+        return (Continue)
+    case t of
+        Interrupt -> shutdownServer
+        Continue  -> interruptHandler
+
+shutdownServer :: Sig.InputT IO ()
+shutdownServer = do
+    Sig.outputStrLn "!SIGINT!"
+    return ()
 
 joinCircle nodeGen lSock chansT port cMsgsT joinLocation = do
     (node, chan) <- newNode nodeGen lSock chansT cMsgsT
