@@ -15,6 +15,8 @@ import           Data.Word              (Word8)
 import           Network.Socket         (Socket)
 import           Prelude                hiding (drop)
 
+import           System.Random          (randomRIO)
+
 import           P2P.Messages
 
 data ProtocolState = Free
@@ -90,10 +92,11 @@ newNodeGenerator :: ByteString -> IO ( IO Node )
 newNodeGenerator serverID = do
     initial <- newTVarIO (0 :: Word8)
     return $ do
-        loc <- atomically $ do
-            loc <- readTVar initial
-            modifyTVar' initial succ
-            return loc
+        loc <- randomRIO (0, 255)
+        -- loc <- atomically $ do
+        --     -- loc <- readTVar initial
+        --     modifyTVar' initial succ
+        --     return loc
         return Node { _nodeID    = serverID
                      , _location  = loc
                       , _state     = Free
