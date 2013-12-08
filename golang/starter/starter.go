@@ -9,7 +9,6 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -76,9 +75,7 @@ func startupClient(port int) (c *Client, err error) {
 	m.RUnlock()
 	fmt.Printf("#%d Starting [%s %v] ..\n", port, *executable, arguments)
 	c.cmd = exec.Command(*executable, arguments...)
-	if runtime.GOOS == "windows" {
-		c.cmd.SysProcAttr = procAttrWindows()
-	}
+	setSysProcAttr(c.cmd)
 
 	outPipe, err := c.cmd.StdoutPipe()
 	if err != nil {
@@ -215,13 +212,4 @@ func listClients() {
 		fmt.Print(c.port, " ")
 	}
 	fmt.Println()
-}
-
-func sendInterruptSignal(p *os.Process) error {
-	// danke windows für die extra wurst
-	if runtime.GOOS == "windows" {
-		return sendInterruptSignalWindows(p)
-	} else {
-		return p.Signal(os.Interrupt)
-	}
 }

@@ -3,17 +3,18 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"syscall"
 )
 
-func procAttrWindows() *syscall.SysProcAttr {
-	return &syscall.SysProcAttr{
+func setSysProcAttr(cmd *exec.Cmd) {
+	cmd.SysProcAttr = &syscall.SysProcAttr{
 		CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP,
 	}
 }
 
 // danke windows für die extra wurst
-func sendInterruptSignalWindows(p *os.Process) error {
+func sendInterruptSignal(p *os.Process) error {
 	d, e := syscall.LoadDLL("kernel32.dll")
 	if e != nil {
 		return e
