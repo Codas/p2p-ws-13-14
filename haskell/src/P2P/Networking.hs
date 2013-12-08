@@ -16,15 +16,15 @@ import           System.IO
 -- handles client connections concurrently. Modelled after Simple.TCPs
 -- acceptFork but returns a handle instead of a socket.
 -- The handle is also closed automatically on disconnect or failure.
-acceptFork :: S.Socket -> ((Handle, S.SockAddr) -> IO ()) -> IO ThreadId
+acceptFork :: S.Socket -> ((S.Socket, Handle, S.SockAddr) -> IO ()) -> IO ThreadId
 acceptFork sock fn = do
     (socket,addr) <- S.accept sock                         -- accept connection.
     handle <- S.socketToHandle socket ReadWriteMode        -- socket -> bidirectional handle.
     hSetBuffering handle NoBuffering          -- buffer by blocks of data.
     hSetBinaryMode handle True
-    forkIO $ E.finally (fn (handle, addr)) (putStrLn "finally" >> hClose handle)
+    forkIO $ E.finally (fn (socket, handle, addr)) (putStrLn "finally" >> hClose handle)
 
-connectTo :: String -> String -> ((Handle, S.SockAddr) -> IO b) -> IO b
+connectTo :: String -> String -> ((Socket, Handle, S.SockAddr) -> IO b) -> IO b
 connectTo host port fn = do
     addrs <- S.getAddrInfo Nothing (Just host) (Just port)
     let addr = head addrs
@@ -34,4 +34,4 @@ connectTo host port fn = do
     handle <- S.socketToHandle sock ReadWriteMode
     hSetBuffering handle NoBuffering          -- buffer by blocks of data.
     hSetBinaryMode handle True
-    E.finally (fn (handle, S.addrAddress addr)) (putStrLn "finally" >> hClose handle)
+    E.finally (fn (sock, handle, S.addrAddress addr)) (putStrLn "finally" >> hClose handle)

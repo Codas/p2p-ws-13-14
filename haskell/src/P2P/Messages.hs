@@ -11,7 +11,7 @@ type IP           = String
 type Port         = String
 type NodeID       = ByteString
 type Location     = Word8
-type Content      = Text
+type Content      = ByteString
 type BinaryStream = ByteString
 
 data Command = SplitEdge
@@ -21,6 +21,7 @@ data Command = SplitEdge
              | HelloCCW
              | TryLater
              | Cancel
+             | Shutdown
              | WithContent
              deriving ( Show )
 
@@ -32,7 +33,7 @@ data Message = SplitEdgeMessage {address :: IP, port :: Port, srcLoc :: Location
              | ContentMessage   {nodeID  :: NodeID,   srcLoc :: Location, content :: Content}
              | TryLaterMessage
              | CancelMessage
-             | Shutdown
+             | ShutdownMessage
              | SendContentMessage {nodeID  :: NodeID, content :: Content}
              deriving (Show, Eq)
 
