@@ -58,6 +58,7 @@ parseCommand byte = command
               (0:0:1:0:1:_) -> Just TryLater
               (0:0:1:1:0:_) -> Just Cancel
               (0:1:0:0:0:_) -> Just WithContent
+              (0:1:0:0:1:_) -> Just Shutdown
               _             -> Nothing
 
 unparseCommand :: Command -> Bool -> BS.ByteString
@@ -71,6 +72,7 @@ unparseCommand command z =
         TryLater            -> createCommandByteString 5  z
         Cancel              -> createCommandByteString 6  z
         WithContent         -> createCommandByteString 8  z
+        Shutdown            -> createCommandByteString 9  z
 
 parseFlags :: W.Word8 -> Flags
 parseFlags byte = Flags { compressed = comp }

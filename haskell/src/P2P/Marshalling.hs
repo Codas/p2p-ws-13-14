@@ -17,7 +17,7 @@ data NetMessage = NetMessage
                   , uuid         :: Maybe NodeID    -- 6 Bytes
                   , fromLocation :: Maybe Location  -- 1 Byte
                   , toLocation   :: Maybe Location  -- 1 Byte
-	              , message      :: Maybe Content }
+	                , message      :: Maybe Content }
                   deriving (Show)
 
 messageToByteString :: Message -> BS.ByteString
@@ -168,6 +168,9 @@ createTryLaterMessage = Just TryLaterMessage
 createCancelMessage :: Maybe Message
 createCancelMessage = Just CancelMessage
 
+createShutdownMessage :: Maybe Message
+createShutdownMessage = Just ShutdownMessage
+
 toNetMessage :: Message -> NetMessage
 toNetMessage msg = case msg of
   SplitEdgeMessage addr port loc         -> NetMessage SplitEdge (Just addr) (Just port) Nothing (Just loc) Nothing Nothing
@@ -178,6 +181,7 @@ toNetMessage msg = case msg of
   ContentMessage   nodeID loc content    -> NetMessage WithContent Nothing Nothing (Just nodeID) (Just loc) Nothing (Just content)
   TryLaterMessage                        -> NetMessage TryLater Nothing Nothing Nothing Nothing Nothing Nothing
   CancelMessage                          -> NetMessage Cancel Nothing Nothing Nothing Nothing Nothing Nothing
+  ShutdownMessage                        -> NetMessage Shutdown Nothing Nothing Nothing Nothing Nothing Nothing
 
 fromNetMessage :: NetMessage -> Maybe Message
 fromNetMessage (NetMessage cmd addr port nodeID srcLoc trgLoc content) = case cmd of
@@ -189,3 +193,4 @@ fromNetMessage (NetMessage cmd addr port nodeID srcLoc trgLoc content) = case cm
   WithContent  -> createContentMessage      nodeID srcLoc content
   TryLater     -> createTryLaterMessage
   Cancel       -> createCancelMessage
+  Shutdown     -> createShutdownMessage
