@@ -55,7 +55,7 @@ func main() {
 
 func startupClients(clients, locations int) {
 	for i := 0; i < clients; i++ {
-		c, err := startupClient(*port)
+		c, err := startupClient(*port, i == 0)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "Error during client startup:", err)
 			continue
@@ -68,13 +68,16 @@ func startupClients(clients, locations int) {
 	}
 }
 
-func startupClient(port int) (c *Client, err error) {
+func startupClient(port int, broadcast bool) (c *Client, err error) {
 	c = &Client{
 		port: port,
 	}
 
 	m.RLock()
 	arguments := []string{"-p", strconv.Itoa(port)}
+	if broadcast {
+		arguments = append(arguments, "-b")
+	}
 	if len(pool) > 0 {
 		for i := 0; i < *locations; i++ {
 			p := pool[rand.Intn(len(pool))]
