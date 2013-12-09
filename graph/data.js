@@ -1,5 +1,3 @@
-console.log(nodeIDs);
-
 var data = [];
 
 var elements = 400
@@ -23,7 +21,8 @@ var nodeIDs;
               +"size: " + f.size + " bytes\n"
         );  
         nodeIDs = getData(contents)
-        console.log(nodeIDs);
+        initialize();
+        paint();
       }
       r.readAsText(f);
 
@@ -57,6 +56,7 @@ for (var i=0; i<= elements; i++) {
 var rectWidth = 1400,
     rectHeight = 800;
 
+function initialize() {
 var range = 2 * (rectWidth + rectHeight);
 // RECTANGLE
 for (var i=0; i<= elements; i++) {
@@ -121,7 +121,7 @@ transformToNewNode()
 transformToNewNode()
 transformToNewNode()
 transformToNewNode()
-
+}
 
 function transformToNewNode() {
 	var random = Math.round(Math.random()*(elements - 1))
