@@ -23,6 +23,7 @@ import qualified Data.ByteString.Lazy           as LS
 import           Data.List
 import           Data.Maybe
 import qualified Data.Text                      as Text
+import           Data.Word
 import           Network.Socket                 (ShutdownCmd (ShutdownSend),
                                                  Socket, sClose, shutdown,
                                                  socketToHandle)
@@ -352,13 +353,16 @@ answer msg@(ContentMessage srcNodeID srcLoc content) node _ _ = do
        mapM_ (`sendMessage` newMsg) cwSocket
        return ()
    when ((nodeID, loc) == (srcNodeID, srcLoc)) $ do
-       putStrLn ("digraph p2p {\n" ++ ((C8.unpack content) ++ " -> " ++ (C8.unpack (BS.take 15 content))) ++ ";\n}")
-       writeFile "p2p.dot" ("digraph p2p {\n" ++ ((C8.unpack content) ++ " -> " ++ (C8.unpack (BS.take 15 content))) ++ ";\n}")
        putStrLn $ "[Handling] Content message Back!" ++ show (_location node)
+       putStrLn $ "[Handling] Number of Nodes: " ++ (show $ length  spl)
+       writeFile "p2p.dot" ("digraph p2p {\n" ++ ((C8.unpack content) ++ " -> " ++ circular) ++ ";\n}")
+       writeFile "p2pMG.dot" ("digraph p2p {\n" ++ ((C8.unpack ((BS.intercalate (C8.pack " ->") . (fmap (BS.take 14)) . C8.split '>') content)) ++ " -> " ++ circular) ++ ";\n}")
    return node
   where cwSocket  = maybeToList $ nodeSocket node _cwPeer
         nodeID    = _nodeID node
         loc       = _location node
+        spl       = C8.split '>' content
+        circular  = (C8.unpack (BS.take 15 content))
         newMsg    = ContentMessage srcNodeID srcLoc newContent
         newContent = content `BS.append` (C8.pack $ " -> N" ++ (hex nodeID) ++ (hex (BS.singleton loc)) )
         hex :: BS.ByteString -> String
@@ -370,7 +374,6 @@ answer (SendContentMessage nodeID) node _ _ = do
     return node
   where msg = ContentMessage nodeID loc c
         handle = fmap _socket $ _cwPeer node
-        bigID = _nodeID node `BS.append` BS.singleton  (_location node)
         loc = _location node
         c = C8.pack $ "N" ++ (hex nodeID) ++ (hex (BS.singleton loc))
         hex :: BS.ByteString -> String
