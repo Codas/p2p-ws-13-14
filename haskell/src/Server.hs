@@ -352,8 +352,8 @@ answer msg@(ContentMessage srcNodeID srcLoc content) node _ _ = do
        mapM_ (`sendMessage` newMsg) cwSocket
        return ()
    when ((nodeID, loc) == (srcNodeID, srcLoc)) $ do
-       putStrLn ("digraph p2p {\n" ++ (C8.unpack content) ++ ";\n}")
-       writeFile "p2p.dot" ("digraph p2p {\n" ++ (C8.unpack content) ++ "->" ++ (C8.unpack (BS.take 14 content)) ++ ";\n}")
+       putStrLn ("digraph p2p {\n" ++ ((C8.unpack content) ++ " -> " ++ (C8.unpack (BS.take 15 content))) ++ ";\n}")
+       writeFile "p2p.dot" ("digraph p2p {\n" ++ ((C8.unpack content) ++ " -> " ++ (C8.unpack (BS.take 15 content))) ++ ";\n}")
        putStrLn $ "[Handling] Content message Back!" ++ show (_location node)
    return node
   where cwSocket  = maybeToList $ nodeSocket node _cwPeer
