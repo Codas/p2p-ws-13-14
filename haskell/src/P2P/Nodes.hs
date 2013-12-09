@@ -97,11 +97,11 @@ newNodeGenerator :: ByteString -> IO ( ProtocolState -> IO Node )
 newNodeGenerator serverID = do
     initial <- newTVarIO (0 :: Word8)
     return $ \state -> do
-        loc <- randomRIO (0, 255)
-        -- loc <- atomically $ do
-        --     -- loc <- readTVar initial
-        --     modifyTVar' initial succ
-        --     return loc
+        -- loc <- randomRIO (0, 255)
+        loc <- atomically $ do
+            loc <- readTVar initial
+            modifyTVar' initial succ
+            return loc
         return Node { _nodeID    = serverID
                      , _location  = loc
                       , _state     = state
