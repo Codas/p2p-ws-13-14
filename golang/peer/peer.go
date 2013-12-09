@@ -231,7 +231,8 @@ func graphFile(sInterval string) {
 				return
 			}
 
-			idx := r.Intn(len(nodes))
+			//idx := r.Intn(len(nodes))
+			idx := 0
 			nodes[idx].InitiateGraph()
 			m.RUnlock()
 		}
