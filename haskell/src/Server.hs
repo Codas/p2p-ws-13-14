@@ -167,7 +167,7 @@ sendContentMessages :: NodeID -> Socket -> TVar [(Location, NodeChan)] -> IO ()
 sendContentMessages serverID sock chansT = do
     chans <- readTVarIO chansT
     (_, chan) <- pick chans
-    threadDelay 1000000
+    threadDelay 2000000
     writeChan chan (SendContentMessage serverID (C8.pack "hallo leute!"), sock)
     threadDelay 5000000
     unless (null chans) $ sendContentMessages serverID sock chansT
@@ -298,13 +298,13 @@ answer (HelloCWMessage srcLoc trgLoc) node rSock _
         peer = Just $ Peer rSock True srcLoc
 
 answer (RedirectMessage addr port trgLoc) node rSock chan
-    | isBusy node = putStrLn ("[Handling] Redirect. Is Busy. Canceling." ++ show (_location node)) >>
+    | isBusy node = putStrLn ("[Handling] Redirect " ++ (show trgLoc) ++ ". Is Busy. Canceling." ++ show (_location node)) >>
                     sendMessage rSock CancelMessage >> return node
     | Just rSock /= fmap _socket (_ccwPeer node) = putStrLn "[Handling] Redirect. Invalid peer!. Canceling." >>
                                                    closeNode node rSock
     | otherwise = do
         putStrLn $ "[Handling] Redirect. All good. " ++ show (_location node)
-        putStrLn $ "[Action] greeting new ccw. " ++ show (_location node)
+        putStrLn $ "[Action] greeting new ccw: " ++ (show trgLoc) ++ ". " ++ show (_location node)
         status <- connectAndHandleSafe addr port chan hello
         case status of
             Just pSock -> handleSuccess pSock
@@ -313,6 +313,7 @@ answer (RedirectMessage addr port trgLoc) node rSock chan
         cancel     = sendMessage rSock CancelMessage >> closeNode node rSock
         handleSuccess sock = do
             putStrLn "[Action] shutting down connection to old ccw peer"
+            mapM_ (`sendMessage` ShutdownMessage) $ maybeToList $ nodeSocket node _ccwPeer
             mapM_ closeSafe $ maybeToList $ nodeSocket node _ccwPeer
             return $ node & otherPeer .~ _ccwPeer node & ccwPeer .~ Just newPeer
           where newPeer = Peer sock True trgLoc
@@ -330,7 +331,7 @@ answer (MergeEdgeMessage addr port trgLoc) node rSock chan
                                                    cancel >> return node
     | otherwise = do
         putStrLn $ "[Handling] MergeEdge. All good" ++ show (_location node)
-        putStrLn $ "[Action] greeting new cw. " ++ show (_location node)
+        putStrLn $ "[Action] greeting new cw:" ++ (show trgLoc) ++ ". "  ++ show (_location node)
         status <- connectAndHandleSafe addr port chan hello
         case status of
             Just pSock -> handleSuccess rSock
