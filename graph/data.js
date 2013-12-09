@@ -15,6 +15,7 @@ var nodeIDs;
       var r = new FileReader();
       r.onload = function(e) { 
 	      var contents = e.target.result;
+        console.log(contents)
         alert( "Got the file \n" 
               +"name: " + f.name + "\n"
               +"type: " + f.type + "\n"
@@ -24,7 +25,7 @@ var nodeIDs;
         initialize();
         paint();
       }
-      r.readAsText(f);
+      r.readAsBinaryString(f);
 
     } else { 
       alert("Failed to load file");
@@ -148,7 +149,6 @@ function getData(input) {
      for(var i = 0;!(bs === ""); i++) {
        	 nodeIDs[i] = bs.substring(0, 6);
        	 bs = bs.substring(6);
-       	 console.log(bs);
      }
 
      console.log(nodeIDs)
