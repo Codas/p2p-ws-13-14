@@ -50,6 +50,9 @@ func main() {
 
 	// shut down
 	m.Lock()
+	if len(pool) == 0 {
+		return
+	}
 	shuttingDown = true
 	m.Unlock()
 	shutdownClients(-1)
