@@ -167,8 +167,8 @@ sendContentMessages :: NodeID -> Socket -> TVar [(Location, NodeChan)] -> IO ()
 sendContentMessages serverID sock chansT = do
     chans <- readTVarIO chansT
     (_, chan) <- pick chans
-    threadDelay 2000000
-    writeChan chan (SendContentMessage serverID (C8.pack "hallo leute!"), sock)
+    threadDelay 1000000
+    writeChan chan (SendContentMessage serverID, sock)
     threadDelay 5000000
     unless (null chans) $ sendContentMessages serverID sock chansT
     return ()
@@ -348,24 +348,31 @@ answer TryLaterMessage node rSock _ = return node
 answer msg@(ContentMessage srcNodeID srcLoc content) node _ _ = do
    when ((nodeID, loc) /= (srcNodeID, srcLoc)) $ do
        putStrLn $ "[Handling] Forwarding content message. To cw peer: " ++ show (_cwPeer node) ++ " from " ++ show (_location node)
-       mapM_ (`sendMessage` msg) cwSocket
+       mapM_ (`sendMessage` newMsg) cwSocket
        return ()
-   when ((nodeID, loc) == (srcNodeID, srcLoc)) $
+   when ((nodeID, loc) == (srcNodeID, srcLoc)) $ do
+        BS.writeFile "data.bs" content
         putStrLn $ "[Handling] Content message Back!" ++ show (_location node)
    return node
   where cwSocket  = maybeToList $ nodeSocket node _cwPeer
+        bigID = _nodeID node `BS.append` BS.singleton  (_location node)
         nodeID    = _nodeID node
         loc       = _location node
+        newMsg    = ContentMessage srcNodeID srcLoc (content `BS.append` bigID)
 
-answer (SendContentMessage nodeID content) node _ _ = do
+answer (SendContentMessage nodeID) node _ _ = do
     putStrLn "[Handling] send content message"
     mapM_ (`sendMessage` msg) $ maybeToList handle
     return node
-  where msg = ContentMessage nodeID loc content
+  where msg = ContentMessage nodeID loc bigID
         handle = fmap _socket $ _cwPeer node
+        bigID = _nodeID node `BS.append` BS.singleton  (_location node)
         loc = _location node
 
 sendMessage :: Socket -> Message -> IO ()
+sendMessage rSock msg@(ContentMessage _ _ _) = do
+    putStrLn ("[Action] Sending Content Message to Socket " ++ show rSock)
+    NBS.sendAll rSock (M.messageToByteString msg)
 sendMessage rSock msg = putStrLn ("[Action] Sending Message: " ++ show msg ++ " to Socket " ++ show rSock) >>
                         NBS.sendAll rSock (M.messageToByteString msg)
 
