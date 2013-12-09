@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 var (
@@ -20,6 +21,7 @@ var (
 	locations  = flag.Int("l", 1, "Number of locations per client in ring")
 	executable = flag.String("x", "server.exe", "Executable file that starts a peer")
 	braodcast  = flag.Bool("b", false, "Let first Peer execute a broadcast")
+	delay      = flag.Int("d", 0, "Delay in ms between starting of peers")
 )
 
 var pool []*Client
@@ -66,6 +68,9 @@ func startupClients(clients, locations int) {
 		pool = append(pool, c)
 		m.Unlock()
 		*port++
+		if i != clients-1 {
+			time.Sleep(time.Duration(*delay) * time.Millisecond)
+		}
 	}
 }
 
