@@ -23,8 +23,9 @@ import           P2P.Messages
 data ProtocolState = Free
                    | Splitting
                    | Merging
+                   | Joining
                    | Done
-                     deriving (Show, Eq)
+                   deriving (Show, Eq)
 
 data Node = Node
             { _nodeID    :: NodeID

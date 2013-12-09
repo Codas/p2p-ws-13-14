@@ -145,8 +145,9 @@ initShutdown = do
     putStrLn "!SIGINT!"
 
 joinCircle nodeGen lSock chansT port joinLocation = do
-    (node, chan) <- newNode nodeGen chansT
-    let jAddr      = joinAddr joinLocation
+    (node', chan) <- newNode nodeGen chansT
+    let node       = node' & protocolState .~ Free
+        jAddr      = joinAddr joinLocation
         jPort      = joinPort joinLocation
         split sock = putStrLn "[Action] Splitting initiated" >> sendMessage sock splitMsg
         splitMsg   = SplitEdgeMessage "127.0.0.1" port (_location node)
@@ -169,7 +170,7 @@ sendContentMessages serverID sock chansT = do
     (_, chan) <- pick chans
     threadDelay 1000000
     writeChan chan (SendContentMessage serverID (C8.pack "hallo leute!"), sock)
-    -- threadDelay 2000000
+    threadDelay 5000000
     unless (null chans) $ sendContentMessages serverID sock chansT
     return ()
 
@@ -180,7 +181,7 @@ socketToMessages (loc, chan) rSock mChansT = do
     putStrLn "[Conn State] DONE!"
   where handleError :: SomeException -> IO ()
         handleError e = do
-            -- putStrLn $ "[Exception] " ++ show e
+            putStrLn $ "[Exception] " ++ show e
             writeChan chan (ShutdownMessage, rSock)
         locChan mLoc cs = do
             chans <- readTVarIO cs
@@ -232,6 +233,9 @@ handleNode self chan chansT
 -- update the node record, than continue
 answer :: Message -> Node -> Socket -> (Location, NodeChan) -> IO Node
 answer ShutdownMessage node rSock _
+    | _state node == Joining = do
+        putStrLn $ "[Handling] Shutdown. Joining failed. "
+        return $ node & protocolState .~ Done
     | _state node == Merging = do
         putStrLn $ "[Handling] Shutdown. Merging -> Done. " ++ show rSock
         when (isStarved node) $ forAllSockets_ node closeSafe
@@ -345,13 +349,11 @@ answer (MergeEdgeMessage addr port trgLoc) node rSock chan
 
 answer TryLaterMessage node rSock _ = return node
 answer msg@(ContentMessage srcNodeID srcLoc content) node _ _ = do
-   putStrLn "[Handling] Content. All Good."
-   putStrLn $ "[CONTENT] " ++ show content -- debugging only
    when ((nodeID, loc) /= (srcNodeID, srcLoc)) $ do
        putStrLn $ "[Handling] Forwarding content message. To cw peer: " ++ show (_cwPeer node)
        mapM_ (`sendMessage` msg) cwSocket
        return ()
-   when ((nodeID, loc) == (srcNodeID, srcLoc)) $ putStrLn "[Handling] Not sending content message"
+   when ((nodeID, loc) == (srcNodeID, srcLoc)) $ putStrLn "[Handling] Content message Back!"
    return node
   where cwSocket  = maybeToList $ nodeSocket node _cwPeer
         nodeID    = _nodeID node
