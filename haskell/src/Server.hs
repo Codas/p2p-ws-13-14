@@ -216,7 +216,7 @@ bytesToMessages chan rSock bs
 
 handleNode :: Node -> Chan (Message, Socket) -> TVar [(Location, NodeChan)] -> IO ()
 handleNode self chan chansT
-    | isDone self = putStrLn ("[State] Node done! " ++ show (_location node)) >>
+    | isDone self = putStrLn ("[State] Node done! " ++ show (_location self)) >>
                     atomically (modifyTVar' chansT (delete (loc, chan)))
     | otherwise = do
         putStrLn "-------------------------------"
