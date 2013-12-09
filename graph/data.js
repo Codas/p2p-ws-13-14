@@ -1,38 +1,3 @@
-var data = [];
-
-var elements = 400
-
-var width = 1600;
-    height = 900;
-
-var nodeIDs;
-
-  function readSingleFile(evt) {
-    //Retrieve the first (and only!) File from the FileList object
-    var f = evt.target.files[0]; 
-
-    if (f) {
-      var r = new FileReader();
-      r.onload = function(e) { 
-	      var contents = e.target.result;
-        console.log(contents)
-        alert( "Got the file \n" 
-              +"name: " + f.name + "\n"
-              +"type: " + f.type + "\n"
-              +"size: " + f.size + " bytes\n"
-        );  
-        nodeIDs = getData(contents)
-        initialize();
-        paint();
-      }
-      r.readAsBinaryString(f);
-
-    } else { 
-      alert("Failed to load file");
-    }
-  }
-
-  document.getElementById('fileinput').addEventListener('change', readSingleFile, false);
 
 /*
  * Generate samples
@@ -57,20 +22,25 @@ for (var i=0; i<= elements; i++) {
 var rectWidth = 1400,
     rectHeight = 800;
 
-function initialize() {
+function generateNodeData(data) {
+  console.log("@-@")
+console.log(data)
 var range = 2 * (rectWidth + rectHeight);
+var elements = data.length
 // RECTANGLE
-for (var i=0; i<= elements; i++) {
+for (var i=0; i< elements; i++) {
 	var rectX;
 	var rectY;
 	var position = range * i / elements
 	var nextUID;
+  var sameNode = data[0].Id.substring(0, data[0].Id.indexOf(":")) === data[i].Id.substring(0, data[i].Id.indexOf(":"));
+  var location = data[i].Id.substring(data[i].Id.indexOf(":") + 1);
 
-	if (elements == i) {
-		nextUID = 'Node0';
+	if (elements == i + 1) {
+		  nextUID = data[0].Id;
 	}
 	else {
-        nextUID = 'Node' + (i+1);
+       nextUID = data[i+1].Id;
 	}
     
     if (position <= rectWidth) {
@@ -93,35 +63,15 @@ for (var i=0; i<= elements; i++) {
     	rectY = (height - rectHeight) / 2 + (position - 2 * rectWidth - rectHeight);
     }
 
-	data.push({
-		uid: 'Node' + i,
-		location: "Location" + Math.round(Math.random() * 20),
+	nodeData.push({
+		uid: data[i].Id,
 		next: nextUID,
-		newnode: false,
+		newnode: sameNode,
 		x: rectX,
 	    y: rectY,
 		fixed: true
 	});
 }
-
-/*
-data.push({
-	uid: 'Node' + elements,
-	location: "Location" + Math.round(Math.random()*20),
-	next: 'Node0',
-	x: width  / 2 + Math.sin(Math.PI * 2 / elements * elements) * radius,
-	y: height / 2 + Math.cos(Math.PI * 2 / elements * elements) * radius,
-	fixed: true
-});
-*/
-
-transformToNewNode()
-transformToNewNode()
-transformToNewNode()
-transformToNewNode()
-transformToNewNode()
-transformToNewNode()
-transformToNewNode()
 }
 
 function transformToNewNode() {
@@ -139,23 +89,7 @@ function transformToNewNode() {
     if (data[random].y == (height + rectHeight) / 2) {
     	data[random].y = data[random].y - 20
     } 
-
 }
-
-function getData(input) {
-	 var bs = input;
-     var nodeIDs = new Array();
-     console.log(" : " + bs);
-     for(var i = 0;!(bs === ""); i++) {
-       	 nodeIDs[i] = bs.substring(0, 6);
-       	 bs = bs.substring(6);
-     }
-
-     console.log(nodeIDs)
-
-     return nodeIDs
-}
-
 /*
 Syntax
   
