@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	p "../peer/protocol"
 )
@@ -19,6 +20,7 @@ var (
 	port = flag.Int("p", 1337, "Port at which to listen")
 )
 
+var r = rand.New(rand.NewSource(time.Now().UnixNano()))
 var nodes []*p.Node
 var m = new(sync.RWMutex)
 
@@ -75,23 +77,23 @@ func forwardConnection(c *p.Connection, msg *p.Message) {
 		}
 
 		if len(freenodes) == 0 {
-			fmt.Printf("[Global] Rcv from %v, No Free Node: Closing Conn: %s\n", c.Remote(), msg)
+			fmt.Printf("[Global] from %v, No Free Node: Closing Conn: %s\n", c.Remote(), msg)
 			c.Close()
 			return
 		}
 
-		n = freenodes[rand.Intn(len(freenodes))]
+		n = freenodes[r.Intn(len(freenodes))]
 	default:
-		fmt.Printf("[Global] Rcv Invalid from %v: %s\n", c.Remote(), msg)
+		fmt.Printf("[Global] invalid from %v: %s\n", c.Remote(), msg)
 		return
 	}
 
 	if n == nil {
-		fmt.Printf("[Global] Rcv from %v -> Loc#%d not found: %s\n", c.Remote(), msg.DstLoc, msg)
+		fmt.Printf("[Global] from %v -> Loc#%d not found: %s\n", c.Remote(), msg.DstLoc, msg)
 		return
 	}
 
-	fmt.Printf("[Global] Rcv from %v -> Loc#%d: %s\n", c.Remote(), n.Loc, msg)
+	fmt.Printf("[Global] from %v -> Loc#%d: %s\n", c.Remote(), n.Loc, msg)
 
 	n.MessageCallback(c, msg)
 }
@@ -109,9 +111,13 @@ func parseStdIO() {
 				connectNewNode(text)
 			case "d":
 				disconnectNode(text)
+			case "b":
+				broadcastNode(text)
 			}
 		} else {
 			switch text {
+			case "h":
+				printHelp()
 			case "cycle":
 				createCycleNode()
 			case "q":
@@ -126,13 +132,48 @@ func parseStdIO() {
 	}
 }
 
+func printHelp() {
+	fmt.Println("HELP")
+	fmt.Println("- h (print this help)")
+	fmt.Println("- q (QUIT)")
+	fmt.Println("- l (list all peers)")
+	fmt.Println("- cycle (create a node that points to itself)")
+	fmt.Println("- c <ip> <port> (connect new node to <ip> <port>)")
+	fmt.Println("- d <#node> (disconnect <#node>, get <#node> from list)")
+	fmt.Println("- b <#node> (broadcast on <#node>, get <#node> from list)")
+	fmt.Println("- br <#node> <delay> (broadcast repeat on <#node> with <delay>, get <#node> from list)")
+}
+
 func listNodes() {
 	m.RLock()
 	defer m.RUnlock()
 
-	for _, n := range nodes {
-		fmt.Println(n)
+	if len(nodes) == 0 {
+		fmt.Println("No nodes currently running")
+		return
 	}
+
+	for i, n := range nodes {
+		fmt.Printf("%d: %s\n", i, n)
+	}
+}
+
+func broadcastNode(sIdx string) {
+	idx, err := strconv.Atoi(sIdx)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Parse Error: %s\n", err)
+		return
+	}
+
+	m.RLock()
+	defer m.RUnlock()
+	if idx < 0 || idx >= len(nodes) {
+		fmt.Fprintf(os.Stderr, "Invalid <#node>, should be [0 - %d).\n", len(nodes))
+		return
+	}
+	n := nodes[idx]
+
+	n.InitiateBroadcast()
 }
 
 func createCycleNode() {
@@ -142,7 +183,7 @@ func createCycleNode() {
 		return
 	}
 
-	n := p.NewNode(localAddress())
+	n := p.NewNode(localAddress(), removeNode)
 	fmt.Printf("[Node#%d] New Node -> Connected to %s\n", n.Loc, c.RemoteAddr())
 	m.Lock()
 	nodes = append(nodes, n)
@@ -153,26 +194,20 @@ func createCycleNode() {
 	n.SendPrev(p.NewHelloCWMessage(localAddress(), n.Loc, n.Loc))
 }
 
-func disconnectNode(loc string) {
-	iLoc, err := strconv.Atoi(loc)
+func disconnectNode(sIdx string) {
+	idx, err := strconv.Atoi(sIdx)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Parse Error: %s\n", err)
 		return
 	}
-	var n *p.Node
 
 	m.RLock()
-	for _, n_ := range nodes {
-		if n_.Loc == p.Location(iLoc) {
-			n = n_
-			break
-		}
-	}
-	m.RUnlock()
-	if n == nil {
-		fmt.Fprintf(os.Stderr, "Node#%s not found\n", loc)
+	defer m.RUnlock()
+	if idx < 0 || idx >= len(nodes) {
+		fmt.Fprintf(os.Stderr, "Invalid <#node>, should be [0 - %d).\n", len(nodes))
 		return
 	}
+	n := nodes[idx]
 
 	n.InitiateMergeEdge()
 }
@@ -195,7 +230,7 @@ func connectNewNode(addr string) {
 		return
 	}
 
-	n := p.NewNode(localAddress())
+	n := p.NewNode(localAddress(), removeNode)
 	fmt.Printf("[Node#%d] New Node -> Connected to %s\n", n.Loc, c.RemoteAddr())
 	m.Lock()
 	nodes = append(nodes, n)
@@ -208,4 +243,18 @@ func connectNewNode(addr string) {
 
 func localAddress() *p.Address {
 	return p.NewAddress("127.0.0.1", *port)
+}
+
+func removeNode(n *p.Node) {
+	m.Lock()
+	defer m.Unlock()
+	if len(nodes) == 0 {
+		return
+	}
+	for i, _n := range nodes {
+		if _n == n {
+			nodes[i] = nodes[len(nodes)-1]
+			nodes = nodes[:len(nodes)-1]
+		}
+	}
 }

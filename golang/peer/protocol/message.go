@@ -14,7 +14,7 @@ const (
 	ActionTryLater
 	ActionCancel
 	ActionShutdown
-	ActionMessage = 8
+	ActionBroadcast = 8
 )
 
 const (
@@ -71,16 +71,16 @@ func (m *Message) String() string {
 		me = "TryLater"
 	case ActionShutdown:
 		me = "Shutdown"
-	case ActionMessage:
-		me = "Message"
+	case ActionBroadcast:
+		me = "Braodcast"
 	}
 	switch m.Action {
 	case ActionSplitEdge, ActionMergeEdge, ActionRedirect:
-		me += "(Addr=" + m.Addr.String() + ", Loc=" + strconv.Itoa(int(m.Loc)) + ")"
+		me += "(" + m.Addr.String() + ", " + strconv.Itoa(int(m.Loc)) + ")"
 	case ActionHelloCW, ActionHelloCCW:
-		me += "(Addr=" + m.Addr.String() + ", srcLoc=" + strconv.Itoa(int(m.SrcLoc)) + ", dstLoc=" + strconv.Itoa(int(m.DstLoc)) + ")"
-	case ActionMessage:
-		me += "(content=" + string(m.Content) + ")"
+		me += "(" + m.Addr.String() + ", src=" + strconv.Itoa(int(m.SrcLoc)) + ", dst=" + strconv.Itoa(int(m.DstLoc)) + ")"
+	case ActionBroadcast:
+		me += "(" + m.Addr.String() + ", " + strconv.Itoa(int(m.Loc)) + ", " + string(m.Content) + ")"
 	}
 	return me
 }
@@ -145,9 +145,11 @@ func NewShutdownMessage() *Message {
 	}
 }
 
-func NewContentMessage(content []byte) *Message {
+func NewBroadcastMessage(addr *Address, loc Location, content []byte) *Message {
 	return &Message{
-		Action:  ActionTryLater,
+		Action:  ActionBroadcast,
+		Addr:    addr,
+		Loc:     loc,
 		Content: content,
 	}
 }
