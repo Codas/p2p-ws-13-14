@@ -22,7 +22,7 @@ acceptFork sock fn = do
     -- handle <- S.socketToHandle socket ReadWriteMode        -- socket -> bidirectional handle.
     -- hSetBuffering handle NoBuffering          -- buffer by blocks of data.
     -- hSetBinaryMode handle True
-    forkIO $ E.finally (fn (socket, addr)) (putStrLn "finally" >> S.close socket)
+    forkIO $ E.finally (fn (socket, addr)) (S.close socket)
 
 connectTo :: String -> String -> ((Socket, S.SockAddr) -> IO b) -> IO b
 connectTo host port fn = do
@@ -34,4 +34,4 @@ connectTo host port fn = do
     -- handle <- S.socketToHandle sock ReadWriteMode
     -- hSetBuffering handle NoBuffering          -- buffer by blocks of data.
     -- hSetBinaryMode handle True
-    E.finally (fn (sock, S.addrAddress addr)) (putStrLn "finally" >> S.close sock)
+    E.finally (fn (sock, S.addrAddress addr)) (S.close sock)

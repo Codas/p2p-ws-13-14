@@ -23,8 +23,9 @@ import           P2P.Messages
 data ProtocolState = Free
                    | Splitting
                    | Merging
+                   | Joining
                    | Done
-                     deriving (Show, Eq)
+                   deriving (Show, Eq)
 
 data Node = Node
             { _nodeID    :: NodeID
@@ -92,18 +93,18 @@ newServerID = do
     serverID <- UUID.nextRandom
     return $ drop 10 $ toStrict (UUID.toByteString serverID)
 
-newNodeGenerator :: ByteString -> IO ( IO Node )
+newNodeGenerator :: ByteString -> IO ( ProtocolState -> IO Node )
 newNodeGenerator serverID = do
     initial <- newTVarIO (0 :: Word8)
-    return $ do
-        loc <- randomRIO (0, 255)
-        -- loc <- atomically $ do
-        --     -- loc <- readTVar initial
-        --     modifyTVar' initial succ
-        --     return loc
+    return $ \state -> do
+        -- loc <- randomRIO (0, 255)
+        loc <- atomically $ do
+            loc <- readTVar initial
+            modifyTVar' initial succ
+            return loc
         return Node { _nodeID    = serverID
                      , _location  = loc
-                      , _state     = Free
+                      , _state     = state
                       , _otherPeer = Nothing
                       , _cwPeer    = Nothing
                       , _ccwPeer   = Nothing }

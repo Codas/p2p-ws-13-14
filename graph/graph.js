@@ -1,9 +1,13 @@
+
+
+
+function paint() {
 var linkDistance = 5,
 	nodename = 'uid';
 
 var links = [],
 	nodes = [];
-var map = {};	
+var map = {};
 
 var size = data.length;
 
@@ -59,9 +63,6 @@ else {
 	nodename = 'location';
 }
 	
-var width = 1600,
-    height = 1000;
-
 var color = d3.scale.category10();
 
 var force = d3.layout.force()
@@ -107,6 +108,8 @@ var node = svg.append("g").selectAll(".node")
   .append("circle")
   .attr("r", function(d) { return d.newnode?10:2; })
   .attr("class", function(d) { return d.newnode?'new':''; })
+  .attr("cx", function(d) { return d.x})
+  .attr("cy", function(d) { return d.y})
   .call(force.drag)
   .on("mouseover", function() {
 		var data = d3.select(this).data();
@@ -138,6 +141,11 @@ var text = svg.append("g").selectAll("text")
     .attr("y", ".31em")
     .text(function(d) { return d[nodename]; });
 
+    console.log("-----")
+    console.log(data)
+    console.log(nodes)
+    console.log(node)
+}
 	
 function tick() {
   node.attr("cx", function(d) { return d.x; })
