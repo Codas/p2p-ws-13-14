@@ -34,6 +34,7 @@ data Message = SplitEdgeMessage {address :: IP, port :: Port, srcLoc :: Location
              | TryLaterMessage
              | CancelMessage
              | ShutdownMessage
+             | InitLeaveMessage
              | SendContentMessage {nodeID :: NodeID}
              deriving (Show, Eq)
 

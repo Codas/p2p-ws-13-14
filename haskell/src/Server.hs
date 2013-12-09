@@ -119,12 +119,12 @@ main = Net.withSocketsDo $ do
     nodeGen  <- newNodeGenerator serverID
     chansT   <- newTVarIO ([] :: [(Location, NodeChan)])
 
-    -- forkIO $ handleInterrupt $ forever $ Sig.getInputLine ""
 
     let addr          = opAddress options
         port          = opPort options
         joinLocations = opJoins options
     Net.listen addr port $ \(lSock, lAddr) -> do
+        forkIO $ (handleInterrupt chansT lSock) $ forever $ Sig.getInputLine ""
         putStrLn $ "[Conn] listening on: " ++ show lAddr
         mapM_ (joinCircle nodeGen stdout chansT port) joinLocations
         when (null joinLocations) $ void $ newNode nodeGen chansT Free
@@ -137,14 +137,17 @@ main = Net.withSocketsDo $ do
             chan <- pick chans
             socketToMessages chan rSock (Just chansT)
 
-handleInterrupt :: Sig.InputT IO () -> IO ()
-handleInterrupt f = Sig.runInputT Sig.defaultSettings $ Sig.withInterrupt
-    $ Sig.handleInterrupt (liftIO initShutdown)
+handleInterrupt :: TVar [(Location, NodeChan)] -> Socket -> Sig.InputT IO () -> IO ()
+handleInterrupt chansT lSock  f = Sig.runInputT Sig.defaultSettings $ Sig.withInterrupt
+    $ Sig.handleInterrupt (liftIO (initShutdown chansT lSock))
     $ f
 
-initShutdown :: IO ()
-initShutdown = do
-    putStrLn "!SIGINT!"
+initShutdown :: TVar [(Location, NodeChan)] -> Socket -> IO ()
+initShutdown chansT lSock = do
+    chansLoc <- readTVarIO chansT
+    mapM_ ((`writeChan` (InitLeaveMessage, lSock)) . snd) chansLoc
+    return ()
+
 
 joinCircle nodeGen lSock chansT port joinLocation = do
     (node, chan) <- newNode nodeGen chansT Joining
@@ -353,6 +356,7 @@ answer msg@(ContentMessage srcNodeID srcLoc content) node _ _ = do
        mapM_ (`sendMessage` newMsg) cwSocket
        return ()
    when ((nodeID, loc) == (srcNodeID, srcLoc)) $ do
+       -- TODO: REFACTOR!!!
        putStrLn $ "[Handling] Content message Back!" ++ show (_location node)
        putStrLn $ "[Handling] Number of Nodes: " ++ (show $ length  spl)
        writeFile "p2p.dot" ("digraph p2p {\n" ++ ((C8.unpack content) ++ " -> " ++ circular) ++ ";\n}")
@@ -378,6 +382,10 @@ answer (SendContentMessage nodeID) node _ _ = do
         c = C8.pack $ "N" ++ (hex nodeID) ++ (hex (BS.singleton loc))
         hex :: BS.ByteString -> String
         hex = concatMap (printf "%02x") . BS.unpack
+
+answer InitLeaveMessage node _ _ = do
+    putStrLn "init leaving!"
+    return node
 
 sendMessage :: Socket -> Message -> IO ()
 sendMessage rSock msg@(ContentMessage _ _ _) = do
