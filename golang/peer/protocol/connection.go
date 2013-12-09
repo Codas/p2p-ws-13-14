@@ -46,7 +46,7 @@ func (c *Connection) SendMessage(msg *Message) error {
 		buf = append(buf, unparseAddress(msg.Addr)...)
 		buf = append(buf, unparseLocation(msg.SrcLoc)...)
 		buf = append(buf, unparseLocation(msg.DstLoc)...)
-	case ActionBroadcast:
+	case ActionBroadcast, ActionGraph:
 		buf = append(buf, unparseAddress(msg.Addr)...)
 		buf = append(buf, unparseLocation(msg.Loc)...)
 		buf = append(buf, unparseContent(msg.Content)...)
@@ -135,7 +135,7 @@ func readMessages(c *Connection) {
 			c.mCallback(c, &Message{
 				Action: action,
 			})
-		case ActionBroadcast:
+		case ActionBroadcast, ActionGraph:
 			addr, err := parseAddress(br)
 			if err != nil {
 				fmt.Fprintln(os.Stderr, "Error reading from socket2: ", err)

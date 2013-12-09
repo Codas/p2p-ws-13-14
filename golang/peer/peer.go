@@ -23,6 +23,8 @@ var (
 var r = rand.New(rand.NewSource(time.Now().UnixNano()))
 var nodes []*p.Node
 var m = new(sync.RWMutex)
+var shuttingDown = false
+var done = make(chan bool)
 
 func main() {
 	flag.Parse()
@@ -38,6 +40,13 @@ func main() {
 	go accepter(l)
 
 	parseStdIO()
+
+	// shut down
+	m.Lock()
+	shuttingDown = true
+	m.Unlock()
+	disconnectAllNodes()
+	<-done
 }
 
 func accepter(l net.Listener) {
@@ -113,6 +122,8 @@ func parseStdIO() {
 				disconnectNode(text)
 			case "b":
 				broadcastNode(text)
+			case "g":
+				graphNode(text)
 			}
 		} else {
 			switch text {
@@ -124,6 +135,12 @@ func parseStdIO() {
 				return
 			case "l":
 				listNodes()
+			case "b":
+				broadcastNode("")
+			case "g":
+				graphNode("")
+			case "da":
+				disconnectAllNodes()
 			}
 		}
 	}
@@ -136,12 +153,14 @@ func printHelp() {
 	fmt.Println("HELP")
 	fmt.Println("- h (print this help)")
 	fmt.Println("- q (QUIT)")
-	fmt.Println("- l (list all peers)")
+	fmt.Println("- l (list all peers, shows <#node>)")
 	fmt.Println("- cycle (create a node that points to itself)")
 	fmt.Println("- c <ip> <port> (connect new node to <ip> <port>)")
 	fmt.Println("- d <#node> (disconnect <#node>, get <#node> from list)")
-	fmt.Println("- b <#node> (broadcast on <#node>, get <#node> from list)")
-	fmt.Println("- br <#node> <delay> (broadcast repeat on <#node> with <delay>, get <#node> from list)")
+	fmt.Println("- da (disconnect all)")
+	fmt.Println("- b (<#node>) (broadcast on <#node>)")
+	fmt.Println("- g (<#node>) (broadcast on <#node>, get <#node> from list)")
+	//fmt.Println("- br <#node> <delay> (broadcast periodically on <#node> with <delay>)")
 }
 
 func listNodes() {
@@ -158,58 +177,65 @@ func listNodes() {
 	}
 }
 
-func broadcastNode(sIdx string) {
-	idx, err := strconv.Atoi(sIdx)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Parse Error: %s\n", err)
-		return
-	}
-
+func graphNode(sIdx string) {
 	m.RLock()
 	defer m.RUnlock()
-	if idx < 0 || idx >= len(nodes) {
-		fmt.Fprintf(os.Stderr, "Invalid <#node>, should be [0 - %d).\n", len(nodes))
-		return
-	}
-	n := nodes[idx]
 
-	n.InitiateBroadcast()
+	idx := r.Intn(len(nodes))
+	if sIdx != "" {
+		var err error
+		idx, err = strconv.Atoi(sIdx)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Parse Error: %s\n", err)
+			return
+		}
+		if idx < 0 || idx >= len(nodes) {
+			fmt.Fprintf(os.Stderr, "Invalid <#node>, should be [0 - %d).\n", len(nodes))
+			return
+		}
+	}
+
+	nodes[idx].InitiateGraph()
+}
+
+func graphCallback(g []*p.NodeAttr) {
+	fmt.Println("Graph:")
+	for _, n := range g {
+		fmt.Print(" -> (", n.Addr.Port(), ":", n.Loc, ")")
+	}
+	fmt.Print("\n")
+}
+
+func broadcastNode(sIdx string) {
+	m.RLock()
+	defer m.RUnlock()
+
+	idx := r.Intn(len(nodes))
+	if sIdx != "" {
+		var err error
+		idx, err = strconv.Atoi(sIdx)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Parse Error: %s\n", err)
+			return
+		}
+		if idx < 0 || idx >= len(nodes) {
+			fmt.Fprintf(os.Stderr, "Invalid <#node>, should be [0 - %d).\n", len(nodes))
+			return
+		}
+	}
+
+	nodes[idx].InitiateBroadcast()
 }
 
 func createCycleNode() {
-	c, err := net.Dial("tcp", "127.0.0.1:"+strconv.Itoa(*port))
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Dial Error: %s\n", err)
+	n := p.NewCycleNode(localAddress(), uniqueLocation(), removeNode, graphCallback)
+	if n == nil {
 		return
 	}
 
-	n := p.NewNode(localAddress(), removeNode)
-	fmt.Printf("[Node#%d] New Node -> Connected to %s\n", n.Loc, c.RemoteAddr())
 	m.Lock()
 	nodes = append(nodes, n)
 	m.Unlock()
-
-	conn := p.NewConnection(c, nil, nil)
-	n.SetPrev(conn, localAddress(), n.Loc)
-	n.SendPrev(p.NewHelloCWMessage(localAddress(), n.Loc, n.Loc))
-}
-
-func disconnectNode(sIdx string) {
-	idx, err := strconv.Atoi(sIdx)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Parse Error: %s\n", err)
-		return
-	}
-
-	m.RLock()
-	defer m.RUnlock()
-	if idx < 0 || idx >= len(nodes) {
-		fmt.Fprintf(os.Stderr, "Invalid <#node>, should be [0 - %d).\n", len(nodes))
-		return
-	}
-	n := nodes[idx]
-
-	n.InitiateMergeEdge()
 }
 
 func connectNewNode(addr string) {
@@ -223,22 +249,69 @@ func connectNewNode(addr string) {
 		fmt.Fprintf(os.Stderr, "Parsing Error: Port (%s) is not a number\n", addrparts[1])
 		return
 	}
+	rAddr := p.NewAddress(addrparts[0], port)
 
-	c, err := net.Dial("tcp", addrparts[0]+":"+addrparts[1])
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Dial Error: %s\n", err)
+	n := p.NewNode(localAddress(), rAddr, uniqueLocation(), removeNode, graphCallback)
+	if n == nil {
 		return
 	}
 
-	n := p.NewNode(localAddress(), removeNode)
-	fmt.Printf("[Node#%d] New Node -> Connected to %s\n", n.Loc, c.RemoteAddr())
 	m.Lock()
 	nodes = append(nodes, n)
 	m.Unlock()
+}
 
-	conn := p.NewConnection(c, nil, nil)
-	n.SetOther(conn, p.NewAddress(addrparts[0], port), 255)
-	n.SendOther(p.NewSplitEdgeMessage(localAddress(), n.Loc))
+func disconnectNode(sIdx string) {
+	m.RLock()
+	defer m.RUnlock()
+
+	idx := r.Intn(len(nodes))
+	if sIdx != "" {
+		var err error
+		idx, err = strconv.Atoi(sIdx)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Parse Error: %s\n", err)
+			return
+		}
+		if idx < 0 || idx >= len(nodes) {
+			fmt.Fprintf(os.Stderr, "Invalid <#node>, should be [0 - %d).\n", len(nodes))
+			return
+		}
+	}
+
+	nodes[idx].InitiateMergeEdge()
+}
+
+func disconnectAllNodes() {
+	m.RLock()
+	defer m.RUnlock()
+
+	for _, n := range nodes {
+		n.InitiateMergeEdge()
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func uniqueLocation() p.Location {
+	m.RLock()
+	defer m.RUnlock()
+	length := len(nodes)
+
+	if length >= 255 {
+		fmt.Fprintln(os.Stderr, "WELL THAT ARE A FUCKTON OF NODES!")
+		return p.Location(r.Intn(255))
+	}
+outer:
+	for {
+		l := p.Location(r.Intn(255))
+		for _, n := range nodes {
+			if l == n.Loc {
+				continue outer
+			}
+		}
+		return l
+	}
+
 }
 
 func localAddress() *p.Address {
@@ -256,5 +329,8 @@ func removeNode(n *p.Node) {
 			nodes[i] = nodes[len(nodes)-1]
 			nodes = nodes[:len(nodes)-1]
 		}
+	}
+	if shuttingDown && len(nodes) == 0 {
+		done <- true
 	}
 }
