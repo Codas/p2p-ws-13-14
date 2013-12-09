@@ -93,10 +93,10 @@ newServerID = do
     serverID <- UUID.nextRandom
     return $ drop 10 $ toStrict (UUID.toByteString serverID)
 
-newNodeGenerator :: ByteString -> IO ( IO Node )
+newNodeGenerator :: ByteString -> IO ( ProtocolState -> IO Node )
 newNodeGenerator serverID = do
     initial <- newTVarIO (0 :: Word8)
-    return $ do
+    return $ \state -> do
         loc <- randomRIO (0, 255)
         -- loc <- atomically $ do
         --     -- loc <- readTVar initial
@@ -104,7 +104,7 @@ newNodeGenerator serverID = do
         --     return loc
         return Node { _nodeID    = serverID
                      , _location  = loc
-                      , _state     = Free
+                      , _state     = state
                       , _otherPeer = Nothing
                       , _cwPeer    = Nothing
                       , _ccwPeer   = Nothing }
