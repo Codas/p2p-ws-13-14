@@ -31,6 +31,7 @@ import qualified Network.Socket.ByteString.Lazy as NLS
 import           Prelude
 import           System.IO
 import           System.Random                  (randomRIO)
+import           Text.Printf
 import qualified Text.Read                      as R
 
 import qualified System.Console.Haskeline       as Sig
@@ -351,23 +352,29 @@ answer msg@(ContentMessage srcNodeID srcLoc content) node _ _ = do
        mapM_ (`sendMessage` newMsg) cwSocket
        return ()
    when ((nodeID, loc) == (srcNodeID, srcLoc)) $ do
-        BS.writeFile "data.bs" content
-        putStrLn $ "[Handling] Content message Back!" ++ show (_location node)
+       putStrLn ("digraph p2p {\n" ++ (C8.unpack content) ++ ";\n}")
+       writeFile "p2p.dot" ("digraph p2p {\n" ++ (C8.unpack content) ++ "->" ++ (C8.unpack (BS.take 14 content)) ++ ";\n}")
+       putStrLn $ "[Handling] Content message Back!" ++ show (_location node)
    return node
   where cwSocket  = maybeToList $ nodeSocket node _cwPeer
-        bigID = _nodeID node `BS.append` BS.singleton  (_location node)
         nodeID    = _nodeID node
         loc       = _location node
-        newMsg    = ContentMessage srcNodeID srcLoc (content `BS.append` bigID)
+        newMsg    = ContentMessage srcNodeID srcLoc newContent
+        newContent = content `BS.append` (C8.pack $ " -> N" ++ (hex nodeID) ++ (hex (BS.singleton loc)) )
+        hex :: BS.ByteString -> String
+        hex = concatMap (printf "%02x") . BS.unpack
 
 answer (SendContentMessage nodeID) node _ _ = do
     putStrLn "[Handling] send content message"
     mapM_ (`sendMessage` msg) $ maybeToList handle
     return node
-  where msg = ContentMessage nodeID loc bigID
+  where msg = ContentMessage nodeID loc c
         handle = fmap _socket $ _cwPeer node
         bigID = _nodeID node `BS.append` BS.singleton  (_location node)
         loc = _location node
+        c = C8.pack $ "N" ++ (hex nodeID) ++ (hex (BS.singleton loc))
+        hex :: BS.ByteString -> String
+        hex = concatMap (printf "%02x") . BS.unpack
 
 sendMessage :: Socket -> Message -> IO ()
 sendMessage rSock msg@(ContentMessage _ _ _) = do
