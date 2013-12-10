@@ -1,7 +1,19 @@
+var nodeData = [];
+
+var width = 1600;
+    height = 900;
+
+var node;
 
 
 
-function paint() {
+	
+d3.json("../golang/peer/graph.json", function(data) {
+
+console.log("-----")
+console.log(data)
+generateNodeData(data)
+
 var linkDistance = 5,
 	nodename = 'uid';
 
@@ -9,23 +21,8 @@ var links = [],
 	nodes = [];
 var map = {};
 
-var size = data.length;
 
-for (var i=0; i< size; i++) {
-	var node = data[i];
-	map[node.uid] = node;
-}
-
-for (var i=0; i< size; i++) {
-	if(typeof map[data[i].next] == 'undefined') {
-		data[i].next = null;
-	}
-	else {
-		data[i].next = map[data[i].next];
-	}
-}
 //console.log(data);
-if (mode == 1) {
 	nodes = data;	
 	for (var i=0; i< size; i++) {
 		if (nodes[i].next !== null) {
@@ -35,38 +32,13 @@ if (mode == 1) {
 			});
 		}
 	}
-}
-else {
-	for (var i=0; i< size; i++) {
-		var node = data[i];
-		if(typeof map[node.location] == 'undefined') {
-			nodes.push(node);
-		    map[node.location] = node;
-		}
-		else if (node.newnode) {
-			map[node.location].newnode = true;
-		}
-	}
 
-	for (var i=0; i< size; i++) {
-		var node = data[i];
-		if (node.next !== null) {
-			links.push({
-				id: links.length,
-				source: map[node.location], 
-				target: map[node.next.location]
-			});
-		}
-	}
-	
-	linkDistance = 300;
-	nodename = 'location';
-}
-	
-var color = d3.scale.category10();
+var size = data.length;
+
+	var color = d3.scale.category10();
 
 var force = d3.layout.force()
-    .nodes(nodes)
+    .nodes(nodeData)
     .links(links)
     .size([width, height])
     .linkDistance(linkDistance)
@@ -89,8 +61,8 @@ svg.append("defs").selectAll("marker")
     .attr("orient", "auto")
 	.append("path")
     .attr("d", "M0,-5L10,0L0,5");
-	
-var path = svg.append("g").selectAll(".link")
+
+    var path = svg.append("g").selectAll(".link")
   .data(force.links())
   .enter()
   .insert("line", ".node")
@@ -101,15 +73,17 @@ var path = svg.append("g").selectAll(".link")
 		d3.select(this).classed("active", true );
 	});*/
 
-	  
-var node = svg.append("g").selectAll(".node")
-  .data(force.nodes())
+console.log("Test")
+console.log(nodeData)
+
+node = svg.append("g").selectAll(".node")
+  .data(nodeData)
   .enter()
   .append("circle")
   .attr("r", function(d) { return d.newnode?10:2; })
-  .attr("class", function(d) { return d.newnode?'new':''; })
-  .attr("cx", function(d) { return d.x})
-  .attr("cy", function(d) { return d.y})
+  .attr("class", function(d) { return d; })
+  //.attr("cx", function(d) { return d.y})
+  //.attr("cy", function(d) { return d.y})
   .call(force.drag)
   .on("mouseover", function() {
 		var data = d3.select(this).data();
@@ -135,18 +109,15 @@ var node = svg.append("g").selectAll(".node")
 
 
 var text = svg.append("g").selectAll("text")
-    .data(force.nodes().filter(function(d) { return d.newnode}))
+    .data(nodeData.filter(function(d) { return d.newnode}))
 	.enter().append("text")
-    .attr("x", 8)
-    .attr("y", ".31em")
+    .attr("x", function(d) {return d.x + 14})
+    .attr("y", function(d) {return d.y })
     .text(function(d) { return d[nodename]; });
-
-    console.log("-----")
-    console.log(data)
-    console.log(nodes)
-    console.log(node)
-}
 	
+
+})
+
 function tick() {
   node.attr("cx", function(d) { return d.x; })
       .attr("cy", function(d) { return d.y; })

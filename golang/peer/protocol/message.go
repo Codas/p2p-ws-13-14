@@ -14,7 +14,8 @@ const (
 	ActionTryLater
 	ActionCancel
 	ActionShutdown
-	ActionMessage = 8
+	ActionBroadcast
+	ActionGraph
 )
 
 const (
@@ -29,6 +30,14 @@ type Location uint8
 type Address struct {
 	ip   string
 	port int
+}
+
+func (a *Address) IP() string {
+	return a.ip
+}
+
+func (a *Address) Port() int {
+	return a.port
 }
 
 func NewAddress(ip string, port int) *Address {
@@ -71,16 +80,20 @@ func (m *Message) String() string {
 		me = "TryLater"
 	case ActionShutdown:
 		me = "Shutdown"
-	case ActionMessage:
-		me = "Message"
+	case ActionBroadcast:
+		me = "Braodcast"
+	case ActionGraph:
+		me = "Graph"
 	}
 	switch m.Action {
 	case ActionSplitEdge, ActionMergeEdge, ActionRedirect:
-		me += "(Addr=" + m.Addr.String() + ", Loc=" + strconv.Itoa(int(m.Loc)) + ")"
+		me += "(" + m.Addr.String() + ", " + strconv.Itoa(int(m.Loc)) + ")"
 	case ActionHelloCW, ActionHelloCCW:
-		me += "(Addr=" + m.Addr.String() + ", srcLoc=" + strconv.Itoa(int(m.SrcLoc)) + ", dstLoc=" + strconv.Itoa(int(m.DstLoc)) + ")"
-	case ActionMessage:
-		me += "(content=" + string(m.Content) + ")"
+		me += "(" + m.Addr.String() + ", src=" + strconv.Itoa(int(m.SrcLoc)) + ", dst=" + strconv.Itoa(int(m.DstLoc)) + ")"
+	case ActionBroadcast:
+		me += "(" + m.Addr.String() + ", " + strconv.Itoa(int(m.Loc)) + ", " + string(m.Content) + ")"
+	case ActionGraph:
+		me += "(" + m.Addr.String() + ", " + strconv.Itoa(int(m.Loc)) + ", len=" + strconv.Itoa(len(m.Content)) + ")"
 	}
 	return me
 }
@@ -145,9 +158,20 @@ func NewShutdownMessage() *Message {
 	}
 }
 
-func NewContentMessage(content []byte) *Message {
+func NewBroadcastMessage(addr *Address, loc Location, content []byte) *Message {
 	return &Message{
-		Action:  ActionTryLater,
+		Action:  ActionBroadcast,
+		Addr:    addr,
+		Loc:     loc,
+		Content: content,
+	}
+}
+
+func NewGraphMessage(addr *Address, loc Location, content []byte) *Message {
+	return &Message{
+		Action:  ActionGraph,
+		Addr:    addr,
+		Loc:     loc,
 		Content: content,
 	}
 }

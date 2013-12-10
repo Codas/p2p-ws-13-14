@@ -16,11 +16,11 @@ import (
 )
 
 var (
-	port       = flag.Int("p", 11000, "first port of a range, where clients listen on")
+	port       = flag.Int("p", 9000, "first port of a range, where clients listen on")
 	clients    = flag.Int("c", 3, "Number of clients to start")
 	locations  = flag.Int("l", 1, "Number of locations per client in ring")
-	executable = flag.String("x", "server.exe", "Executable file that starts a peer")
-	braodcast  = flag.Bool("b", false, "Let first Peer execute a broadcast")
+	executable = flag.String("x", "peer.exe", "Executable file that starts a peer")
+	graph      = flag.Bool("g", false, "Let first Peer execute a graph generation")
 	delay      = flag.Int("d", 0, "Delay in ms between starting of peers")
 )
 
@@ -36,6 +36,13 @@ type Client struct {
 	in *bufio.Writer
 }
 
+func (c *Client) sendCommand(cmd string) {
+	c.in.WriteString(cmd)
+	c.in.WriteString("\n")
+	c.in.Flush()
+	fmt.Printf("#%d >> %s\n", c.port, cmd)
+}
+
 func main() {
 	flag.Parse()
 
@@ -44,6 +51,7 @@ func main() {
 	fmt.Println("- l (list client ports)")
 	fmt.Println("- n <#clients> (start <number of clients>)")
 	fmt.Println("- s <#clients> (shutdown <number of clients>)")
+	fmt.Println("- c <#port> <cmd> (send <cmd> to client with <#port>)")
 
 	startupClients(*clients, *locations)
 	parseStdIO()
@@ -61,7 +69,7 @@ func main() {
 
 func startupClients(clients, locations int) {
 	for i := 0; i < clients; i++ {
-		c, err := startupClient(*port, *braodcast && i == 0)
+		c, err := startupClient(*port)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "Error during client startup:", err)
 			continue
@@ -77,25 +85,13 @@ func startupClients(clients, locations int) {
 	}
 }
 
-func startupClient(port int, broadcast bool) (c *Client, err error) {
+func startupClient(port int) (c *Client, err error) {
 	c = &Client{
 		port: port,
 	}
 
-	m.RLock()
-	arguments := []string{"-p", strconv.Itoa(port)}
-	if broadcast {
-		arguments = append(arguments, "-b")
-	}
-	if len(pool) > 0 {
-		for i := 0; i < *locations; i++ {
-			p := pool[rand.Intn(len(pool))]
-			arguments = append(arguments, "127.0.0.1:"+strconv.Itoa(p.port))
-		}
-	}
-	m.RUnlock()
-	fmt.Printf("#%d Starting [%s %v] ..\n", port, *executable, arguments)
-	c.cmd = exec.Command(*executable, arguments...)
+	fmt.Printf("#%d Starting [%s -p %d] ..\n", port, *executable, port)
+	c.cmd = exec.Command(*executable, "-p", strconv.Itoa(port))
 	setSysProcAttr(c.cmd)
 
 	outPipe, err := c.cmd.StdoutPipe()
@@ -119,12 +115,27 @@ func startupClient(port int, broadcast bool) (c *Client, err error) {
 	go func() {
 		err := c.cmd.Run()
 		if err != nil {
-			fmt.Printf("#%d Exited..\n", c.port)
-		} else {
 			fmt.Printf("#%d Exited (Error: %s)..\n", c.port, err)
+		} else {
+			fmt.Printf("#%d Exited..\n", c.port)
 		}
 		removeClient(c)
 	}()
+
+	m.RLock()
+	if len(pool) == 0 {
+		c.sendCommand("cycle")
+	}
+	if len(pool) == 0 && *graph {
+		c.sendCommand("gf")
+	}
+	if len(pool) > 0 {
+		for i := 0; i < *locations; i++ {
+			p := pool[rand.Intn(len(pool))]
+			c.sendCommand("c 127.0.0.1 " + strconv.Itoa(p.port))
+		}
+	}
+	m.RUnlock()
 
 	return c, nil
 }
@@ -135,9 +146,6 @@ func printReader(port int, r io.Reader, w io.Writer) {
 	for scanner.Scan() {
 		text := scanner.Text()
 		fmt.Fprintf(w, "[%d] %s\n", port, text)
-	}
-	if err := scanner.Err(); err != nil {
-		fmt.Fprintf(os.Stderr, "[%d] Error: %s\n", port, err)
 	}
 }
 
@@ -162,6 +170,17 @@ func parseStdIO() {
 				} else {
 					fmt.Fprintln(os.Stderr, "Parsing error:", err)
 				}
+			case "c":
+				idx = strings.Index(text, " ")
+				if idx == -1 {
+					fmt.Fprintln(os.Stderr, "Malformed command")
+				}
+				if i, err := strconv.Atoi(text[:idx]); err == nil {
+					sendCommandtoClient(i, text[idx+1:])
+				} else {
+					fmt.Fprintln(os.Stderr, "Parsing error:", err)
+				}
+
 			}
 		} else {
 			switch text {
@@ -174,6 +193,18 @@ func parseStdIO() {
 	}
 	if err := scanner.Err(); err != nil {
 		fmt.Fprintln(os.Stderr, "Error reading stdio:", err)
+	}
+}
+
+func sendCommandtoClient(port int, cmd string) {
+	m.RLock()
+	defer m.RUnlock()
+
+	for _, c := range pool {
+		if c.port == port {
+			c.sendCommand(cmd)
+			break
+		}
 	}
 }
 
@@ -198,10 +229,13 @@ func shutdownClients(num int) {
 }
 
 func shutdownClient(c *Client) {
-	fmt.Printf("#%d Sending Interrupt..\n", c.port)
-	if err := sendInterruptSignal(c.cmd.Process); err != nil {
-		fmt.Fprintf(os.Stderr, "#%d Error sending signal: %s\n", c.port, err)
-	}
+	/*
+		fmt.Printf("#%d Sending Interrupt..\n", c.port)
+		if err := sendInterruptSignal(c.cmd.Process); err != nil {
+			fmt.Fprintf(os.Stderr, "#%d Error sending signal: %s\n", c.port, err)
+		}
+	*/
+	c.sendCommand("q")
 }
 
 func removeClient(c *Client) {
