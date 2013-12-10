@@ -28,8 +28,8 @@ data Command = SplitEdge
 data Message = SplitEdgeMessage {address :: IP, port :: Port, srcLoc :: Location}
              | MergeEdgeMessage {address :: IP, port :: Port, trgLoc :: Location}
              | RedirectMessage  {address :: IP, port :: Port, trgLoc :: Location}
-             | HelloCWMessage   {srcLoc  :: Location, trgLoc :: Location}
-             | HelloCCWMessage  {srcLoc  :: Location, trgLoc :: Location}
+             | HelloCWMessage   {address :: IP, port :: Port, srcLoc :: Location, trgLoc :: Location}
+             | HelloCCWMessage  {address :: IP, port :: Port, srcLoc :: Location, trgLoc :: Location}
              | ContentMessage   {nodeID  :: NodeID,   srcLoc :: Location, content :: Content}
              | TryLaterMessage
              | CancelMessage

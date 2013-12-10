@@ -20,6 +20,15 @@ import           System.Random          (randomRIO)
 
 import           P2P.Messages
 
+class HasSocket a where
+    getSocket :: a -> Socket
+
+instance HasSocket Socket where
+    getSocket s = s
+
+instance HasSocket Peer where
+    getSocket = _pSocket
+
 data ProtocolState = Free
                    | Splitting
                    | Merging
@@ -30,6 +39,8 @@ data ProtocolState = Free
 data Node = Node
             { _nodeID    :: NodeID
             , _location  :: Location
+            , _nAddr     :: IP
+            , _nPort     :: Port
             , _state     :: ProtocolState
             , _otherPeer :: Maybe Peer
             , _cwPeer    :: Maybe Peer
@@ -57,14 +68,14 @@ protocolState = lens _state (\record v -> record { _state = v })
 isStarved :: Node -> Bool
 isStarved node = and $ forAllPeers node _isReadable
 
-nodeSocket :: Node -> (Node -> Maybe Peer) -> Maybe Socket
-nodeSocket node getter = fmap _socket (getter node)
+nSocket :: Node -> (Node -> Maybe Peer) -> Maybe Socket
+nSocket node getter = fmap _pSocket (getter node)
 
 -- nodeHandle :: Node -> (Node -> Maybe Peer) -> Maybe Handle
 -- nodeHandle node getter = fmap _handle (getter node)
 
-nodeLocation :: Node -> (Node -> Maybe Peer) -> Maybe Location
-nodeLocation node getter = fmap _peerLocation (getter node)
+peerLocation :: Node -> (Node -> Maybe Peer) -> Maybe Location
+peerLocation node getter = fmap _pLocation (getter node)
 
 isBusy :: Node -> Bool
 isBusy Node { _state = Free } = False
@@ -83,7 +94,7 @@ forAllPeers :: Node -> (Peer -> b) -> [b]
 forAllPeers node fn = fmap fn $ catMaybes [_cwPeer node, _ccwPeer node]
 
 forAllSockets_ :: Monad m => Node -> (Socket -> m b) -> m ()
-forAllSockets_ node fn = mapM_ fn $ catMaybes $ fmap (nodeSocket node) [_cwPeer, _ccwPeer]
+forAllSockets_ node fn = mapM_ fn $ catMaybes $ fmap (nSocket node) [_cwPeer, _ccwPeer]
 
 --------------------
 -- Node generator --
@@ -93,37 +104,42 @@ newServerID = do
     serverID <- UUID.nextRandom
     return $ drop 10 $ toStrict (UUID.toByteString serverID)
 
-newNodeGenerator :: ByteString -> IO ( ProtocolState -> IO Node )
-newNodeGenerator serverID = do
+newNodeGenerator :: NodeID -> IP -> Port -> IO ( ProtocolState -> IO Node )
+newNodeGenerator serverID addr port = do
     initial <- newTVarIO (0 :: Word8)
     return $ \state -> do
-        -- loc <- randomRIO (0, 255)
-        loc <- atomically $ do
-            loc <- readTVar initial
-            modifyTVar' initial succ
-            return loc
+        loc <- randomRIO (0, 255)
+        -- loc <- atomically $ do
+        --     loc <- readTVar initial
+        --     modifyTVar' initial succ
+        --     return loc
         return Node { _nodeID    = serverID
-                     , _location  = loc
-                      , _state     = state
-                      , _otherPeer = Nothing
-                      , _cwPeer    = Nothing
-                      , _ccwPeer   = Nothing }
+                    , _location  = loc
+                    , _nAddr     = addr
+                    , _nPort     = port
+                    , _state     = state
+                    , _otherPeer = Nothing
+                    , _cwPeer    = Nothing
+                    , _ccwPeer   = Nothing }
 -- Peers --
 -----------
 data Peer = Peer
-            { _socket       :: Socket
-            , _isReadable   :: Bool
-            , _peerLocation :: Word8 }
+            { _pSocket    :: Socket
+            , _pAddr      :: IP
+            , _pPort      :: Port
+            , _pLocation  :: Word8
+            , _isReadable :: Bool }
 
 instance Show Peer where
-    show (Peer _ _ loc) = show loc
+    show (Peer _ _ port loc _) = show loc ++ ":" ++ port
 
 
 instance Eq Peer where
-    (Peer sock _ loc) == (Peer sock1 _ loc1) = sock == sock1 && loc == loc1
+    (Peer sock addr port _ loc) == (Peer sock1 addr1 port1 _ loc1) =
+        sock == sock1 && loc == loc1 && addr == addr1 && port == port1
 
-socket :: Lens' Peer Socket
-socket = lens _socket (\record v -> record { _socket = v })
+pSocket :: Lens' Peer Socket
+pSocket = lens _pSocket (\record v -> record { _pSocket = v })
 
 -- pHandle :: Lens' Peer Handle
 -- pHandle = lens _handle (\record v -> record { _handle = v })

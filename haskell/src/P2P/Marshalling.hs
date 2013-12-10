@@ -11,13 +11,13 @@ import           P2P.Messages
 import           P2P.Protocol
 
 data NetMessage = NetMessage
-                  { command      :: Command
-                  , address      :: Maybe IP        -- 4 Bytes
-                  , port         :: Maybe Port      -- 2 Bytes
-                  , uuid         :: Maybe NodeID    -- 6 Bytes
-                  , fromLocation :: Maybe Location  -- 1 Byte
-                  , toLocation   :: Maybe Location  -- 1 Byte
-	                , message      :: Maybe Content }
+                  { command       :: Command
+                  , address       :: Maybe IP        -- 4 Bytes
+                  , port          :: Maybe Port      -- 2 Bytes
+                  , uuid          :: Maybe NodeID    -- 6 Bytes
+                  , fromLocation  :: Maybe Location  -- 1 Byte
+                  , toLocation    :: Maybe Location  -- 1 Byte
+	                , message      ::Maybe Content }
                   deriving (Show)
 
 messageToByteString :: Message -> BS.ByteString
@@ -63,13 +63,15 @@ handleZippedMessage ls mCmd = (msg, rest)
 
 containsUUID :: Maybe Command -> Bool
 containsUUID Nothing = False
-containsUUID (Just cmd) = case cmd of 
+containsUUID (Just cmd) = case cmd of
   WithContent   -> True
   _             -> False
 
 containsAddr :: Maybe Command -> Bool
 containsAddr Nothing = False
 containsAddr (Just cmd) = case cmd of
+  HelloCW       -> True
+  HelloCCW      -> True
   SplitEdge     -> True
   MergeEdge     -> True
   Redirect      -> True
@@ -78,6 +80,8 @@ containsAddr (Just cmd) = case cmd of
 containsPort :: Maybe Command -> Bool
 containsPort Nothing = False
 containsPort (Just cmd) = case cmd of
+  HelloCW       -> True
+  HelloCCW      -> True
   SplitEdge     -> True
   MergeEdge     -> True
   Redirect      -> True
@@ -138,13 +142,15 @@ extractContent ls cmd     = if containsContent cmd then (Just content, rest) els
        where Just mTuple  = parseContent ls
              (content, rest)  = mTuple
 
-createHelloCWMessage :: Maybe Location -> Maybe Location -> Maybe Message
-createHelloCWMessage (Just srcLoc) (Just trgLoc) = Just $ HelloCWMessage srcLoc trgLoc
-createHelloCWMessage _ _ = Nothing
+createHelloCWMessage :: Maybe IP -> Maybe Port -> Maybe Location -> Maybe Location -> Maybe Message
+createHelloCWMessage (Just addr) (Just port) (Just srcLoc) (Just trgLoc) =
+    Just $ HelloCWMessage addr port srcLoc trgLoc
+createHelloCWMessage _ _ _ _ = Nothing
 
-createHelloCCWMessage :: Maybe Location -> Maybe Location -> Maybe Message
-createHelloCCWMessage (Just srcLoc) (Just trgLoc) = Just $ HelloCCWMessage srcLoc trgLoc
-createHelloCCWMessage _ _ = Nothing
+createHelloCCWMessage :: Maybe IP -> Maybe Port -> Maybe Location -> Maybe Location -> Maybe Message
+createHelloCCWMessage (Just addr) (Just port) (Just srcLoc) (Just trgLoc) =
+    Just $ HelloCCWMessage addr port srcLoc trgLoc
+createHelloCCWMessage _ _ _ _ = Nothing
 
 createContentMessage :: Maybe NodeID -> Maybe Location -> Maybe Content -> Maybe Message
 createContentMessage (Just nodeID) (Just loc) (Just content) = Just $ ContentMessage nodeID loc content
@@ -173,23 +179,29 @@ createShutdownMessage = Just ShutdownMessage
 
 toNetMessage :: Message -> NetMessage
 toNetMessage msg = case msg of
-  SplitEdgeMessage addr port loc         -> NetMessage SplitEdge (Just addr) (Just port) Nothing (Just loc) Nothing Nothing
-  MergeEdgeMessage addr port loc         -> NetMessage MergeEdge (Just addr) (Just port) Nothing (Just loc) Nothing Nothing
-  RedirectMessage  addr port loc         -> NetMessage Redirect  (Just addr) (Just port) Nothing (Just loc) Nothing Nothing
-  HelloCWMessage   srcLoc trgLoc         -> NetMessage HelloCW  Nothing Nothing Nothing (Just srcLoc) (Just trgLoc) Nothing
-  HelloCCWMessage  srcLoc trgLoc         -> NetMessage HelloCCW Nothing Nothing Nothing (Just srcLoc) (Just trgLoc) Nothing 
-  ContentMessage   nodeID loc content    -> NetMessage WithContent Nothing Nothing (Just nodeID) (Just loc) Nothing (Just content)
-  TryLaterMessage                        -> NetMessage TryLater Nothing Nothing Nothing Nothing Nothing Nothing
-  CancelMessage                          -> NetMessage Cancel Nothing Nothing Nothing Nothing Nothing Nothing
-  ShutdownMessage                        -> NetMessage Shutdown Nothing Nothing Nothing Nothing Nothing Nothing
+  SplitEdgeMessage addr port loc ->
+      NetMessage SplitEdge (Just addr) (Just port) Nothing (Just loc) Nothing Nothing
+  MergeEdgeMessage addr port loc->
+      NetMessage MergeEdge (Just addr) (Just port) Nothing (Just loc) Nothing Nothing
+  RedirectMessage addr port loc ->
+      NetMessage Redirect  (Just addr) (Just port) Nothing (Just loc) Nothing Nothing
+  HelloCWMessage addr port srcLoc trgLoc ->
+      NetMessage HelloCW  (Just addr) (Just port) Nothing (Just srcLoc) (Just trgLoc) Nothing
+  HelloCCWMessage  addr port srcLoc trgLoc ->
+      NetMessage HelloCCW (Just addr) (Just port)  Nothing (Just srcLoc) (Just trgLoc) Nothing
+  ContentMessage nodeID loc content      ->
+      NetMessage WithContent Nothing Nothing (Just nodeID) (Just loc) Nothing (Just content)
+  TryLaterMessage -> NetMessage TryLater Nothing Nothing Nothing Nothing Nothing Nothing
+  CancelMessage   -> NetMessage Cancel Nothing Nothing Nothing Nothing Nothing Nothing
+  ShutdownMessage -> NetMessage Shutdown Nothing Nothing Nothing Nothing Nothing Nothing
 
 fromNetMessage :: NetMessage -> Maybe Message
 fromNetMessage (NetMessage cmd addr port nodeID srcLoc trgLoc content) = case cmd of
   SplitEdge    -> createSplitEdgeMessage    addr port srcLoc
   MergeEdge    -> createMergeEdgeMessage    addr port trgLoc
   Redirect     -> createRedirectMessage     addr port trgLoc
-  HelloCW      -> createHelloCWMessage      srcLoc trgLoc
-  HelloCCW     -> createHelloCCWMessage     srcLoc trgLoc
+  HelloCW      -> createHelloCWMessage      addr port srcLoc trgLoc
+  HelloCCW     -> createHelloCCWMessage     addr port srcLoc trgLoc
   WithContent  -> createContentMessage      nodeID srcLoc content
   TryLater     -> createTryLaterMessage
   Cancel       -> createCancelMessage
