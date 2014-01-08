@@ -12,7 +12,6 @@
 | :----------: | :---------------: | :---------------: |
 | Code & Flags | Source Location   | Target Location   |
 
-
 **ContentMessage**:
 
 | 1 Byte       | 6 Bytes            | 1 Byte               | 1 - 8 Bytes | 1+ Bytes   |
@@ -20,11 +19,13 @@
 | Code & Flags | NodeID (UUID)      | Location (Initiator) | Length      | Message    |
 
 **FishMessage**:
+
 | 1 Byte       | 4 Byte               | 4 Byte               |
 | :----------: | :------------------: | :------------------: |
 | Code & Flags | Water (32bit Double) | Fish (32bit Double)  |
 
 **Join**:
+
 | 1 Byte       | 6 Bytes            |  
 | :----------: | :----------------: | 
 | Code & Flags | NewNode IPv4       | 
