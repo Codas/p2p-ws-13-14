@@ -19,6 +19,21 @@
 | :----------: | :----------------: | :------------------: | :---------: | :--------: |
 | Code & Flags | NodeID (UUID)      | Location (Initiator) | Length      | Message    |
 
+**FishMessage**
+| 1 Byte       | 4 Byte               | 4 Byte               |
+| :----------: | :------------------: | :------------------: |
+| Code & Flags | Water (32bit Double) | Fish (32bit Double)  |
+
+**Join**
+| 1 Byte       | 6 Bytes            |  
+| :----------: | :----------------: | 
+| Code & Flags | NewNode IPv4       | 
+
+**RandomWalk**
+
+| 1 Byte       | 6 Bytes            | 1 Byte               | 
+| :----------: | :----------------: | :------------------: |
+| Code & Flags | NewNode IPv4       | Hops                 |
 
 ## Flags
 | 7 - 3  | 2   | 1        | 0        |
@@ -28,16 +43,19 @@
 
 **Action**:
 
-| Binary     | Command   | Comments                           |
-| :---:      | :---      | :---                               |
-| `00000` (0) | SplitEdge | Initial Join Request               |
-| `00001` (1) | MergeEdge | Leave Request                      |
-| `00010` (2) | Redirect  | Message to change Edge-Destination |
-| `00011` (3) | Hello CW  | Ack                                |
-| `00100` (4) | Hello CCW | Ack                                |
-| `00101` (5) | Try-Later | Cancel for MergeEdge               |
-| `00110` (6) | Cancel    | Cancel for Redirect                |
-| `01000` (8) | Message   |                                    |
+| Binary      | Command    | Comments                           |
+| :---:       | :---        | :---                               |
+| `00000` (0) | SplitEdge   | Initial Join Request               |
+| `00001` (1) | MergeEdge   | Leave Request                      |
+| `00010` (2) | Redirect    | Message to change Edge-Destination |
+| `00011` (3) | Hello CW    | Ack                                |
+| `00100` (4) | Hello CCW   | Ack                                |
+| `00101` (5) | Try-Later   | Cancel for MergeEdge               |
+| `00110` (6) | Cancel      | Cancel for Redirect                |
+| `01000` (8) | Message     |                                    |
+| `01001` (9) | FishMessage | Send Water and Fishinformation     |
+| `01010` (10)| Join        | Request to find position to join   |
+| `01011` (11)| RandomWalk  | Walk 3 log (n) Steps               |
 
 
 ### Compression (Zip)
