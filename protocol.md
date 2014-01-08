@@ -19,17 +19,17 @@
 | :----------: | :----------------: | :------------------: | :---------: | :--------: |
 | Code & Flags | NodeID (UUID)      | Location (Initiator) | Length      | Message    |
 
-**FishMessage**
+**FishMessage**:
 | 1 Byte       | 4 Byte               | 4 Byte               |
 | :----------: | :------------------: | :------------------: |
 | Code & Flags | Water (32bit Double) | Fish (32bit Double)  |
 
-**Join**
+**Join**:
 | 1 Byte       | 6 Bytes            |  
 | :----------: | :----------------: | 
 | Code & Flags | NewNode IPv4       | 
 
-**RandomWalk**
+**RandomWalk**:
 
 | 1 Byte       | 6 Bytes            | 1 Byte               | 
 | :----------: | :----------------: | :------------------: |
