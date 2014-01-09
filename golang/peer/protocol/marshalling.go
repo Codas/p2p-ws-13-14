@@ -132,6 +132,20 @@ func unparseLocation(l Location) []byte {
 	return buf
 }
 
+func parseHops(br byteReader) (h HopsLeft, err error) {
+	b, err := br.ReadByte()
+	if err != nil {
+		return 0, err
+	}
+	return HopsLeft(b), nil
+}
+
+func unparseHops(h HopsLeft) []byte {
+	buf := make([]byte, 1)
+	buf[0] = byte(h)
+	return buf
+}
+
 func parseContent(br byteReader) (c []byte, err error) {
 	length, err := parseLength(br)
 	return readN(br, int(length))
@@ -155,23 +169,20 @@ func readN(r io.Reader, length int) (b []byte, err error) {
 	return buf, nil
 }
 
-func parseFishAndWater(br byteReader) (fish float32, water float32, err error) {
-	length, _ := parseLength(br)
+func parseFishAndWater(br byteReader) (fish FishCarry, water WaterCarry, err error) {
+	buf, err := readN(br, 16)
 
-	if length != 16 {
-		err = errors.New("FishAndLengthParsing: Length != 16")
+	if err != nil {
 		return
 	}
 
-	content, err := readN(br, int(length))
+	fishMantisse := readBytesAsInt(buf[0:4])
+	fishExp := readBytesAsInt(buf[4:8]) - 32768
+	waterMantisse := readBytesAsInt(buf[8:12])
+	waterExp := readBytesAsInt(buf[12:16]) - 32768
 
-	fishMantisse := readBytesAsInt(content[0:4])
-	fishExp := readBytesAsInt(content[4:8]) - 32768
-	waterMantisse := readBytesAsInt(content[8:12])
-	waterExp := readBytesAsInt(content[12:16]) - 32768
-
-	fish = float32(float64(fishMantisse) * math.Pow(float64(2), float64(fishExp)))
-	water = float32(float64(waterMantisse) * math.Pow(float64(2), float64(waterExp)))
+	fish = FishCarry(float32(float64(fishMantisse) * math.Pow(float64(2), float64(fishExp))))
+	water = WaterCarry(float32(float64(waterMantisse) * math.Pow(float64(2), float64(waterExp))))
 	return
 }
 

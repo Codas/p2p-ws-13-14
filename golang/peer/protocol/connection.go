@@ -56,6 +56,7 @@ func (c *Connection) SendMessage(msg *Message) error {
 		buf = append(buf, unparseAddress(msg.Addr)...)
 	case ActionRandomWalk:
 		buf = append(buf, unparseAddress(msg.Addr)...)
+		buf = append(buf, unparseHops(1)) // TODO: Calculate hops
 	}
 
 	return writeN(c.c, buf)
@@ -138,7 +139,7 @@ func readMessages(c *Connection) {
 				SrcLoc: srcLoc,
 				DstLoc: dstLoc,
 			})
-		case ActionCancel, ActionTryLater, ActionShutdown:
+		case ActionCancel, ActionTryLater, ActionShutdown, ActionJoin:
 			c.mCallback(c, &Message{
 				Action: action,
 			})
@@ -163,6 +164,30 @@ func readMessages(c *Connection) {
 				Addr:    addr,
 				Loc:     loc,
 				Content: content,
+			})
+		case ActionFishMessage:
+			fish, water, err := parseFishAndWater(br)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "Error on parsing fish and water", err)
+			}
+			c.mCallback(c, &Message{
+				Action: action,
+				Fish:   fish,
+				Water:  water,
+			})
+		case ActionRandomWalk:
+			addr, err := parseAddress(br)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "Error on parsing Addr of RandomWalk", err)
+			}
+			hops, err := parseHops(br)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "Error on parsing hops of RandomWalk", err)
+			}
+			c.mCallback(c, &Message{
+				Action: action,
+				Addr:   addr,
+				Hops:   hops,
 			})
 		}
 	}

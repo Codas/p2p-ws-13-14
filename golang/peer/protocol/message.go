@@ -29,6 +29,9 @@ const (
 
 type Action int
 type Location uint8
+type FishCarry float32
+type WaterCarry float32
+type HopsLeft uint8
 
 type Address struct {
 	ip   string
@@ -61,6 +64,9 @@ type Message struct {
 	Loc     Location
 	SrcLoc  Location
 	DstLoc  Location
+	Fish    FishCarry
+	Water   WaterCarry
+	Hops    HopsLeft
 	Content []byte
 }
 
@@ -105,7 +111,7 @@ func (m *Message) String() string {
 	case ActionGraph:
 		me += "(" + m.Addr.String() + ", " + strconv.Itoa(int(m.Loc)) + ", len=" + strconv.Itoa(len(m.Content)) + ")"
 	case ActionFishMessage:
-		me += "(" + strconv.Itoa(len(m.Content)) + ")"
+		me += "(" + strconv.Itoa(len(m.Content)) + ", " + strconv.Itoa(int(m.Fish)) + ", " + strconv.Itoa(int(m.Water)) + ")"
 
 	case ActionJoin:
 		me += "(" + m.Addr.String() + ")"
@@ -193,10 +199,11 @@ func NewGraphMessage(addr *Address, loc Location, content []byte) *Message {
 	}
 }
 
-func NewFishMessage(addr *Address, content []byte) *Message {
+func NewFishMessage(addr *Address, fish FishCarry, water WaterCarry) *Message {
 	return &Message{
-		Action:  ActionFishMessage,
-		Content: content,
+		Action: ActionFishMessage,
+		Fish:   fish,
+		Water:  water,
 	}
 }
 
@@ -206,9 +213,9 @@ func NewJoinMessage(addr *Address) *Message {
 	}
 }
 
-func NewRandomWalkMessage(addr *Address, content []byte) *Message {
+func NewRandomWalkMessage(addr *Address, hops HopsLeft) *Message {
 	return &Message{
-		Action:  ActionRandomWalk,
-		Content: content,
+		Action: ActionRandomWalk,
+		Hops:   hops,
 	}
 }
