@@ -16,6 +16,9 @@ const (
 	ActionShutdown
 	ActionBroadcast
 	ActionGraph
+	ActionFishMessage
+	ActionJoin
+	ActionRandomWalk
 )
 
 const (
@@ -84,7 +87,14 @@ func (m *Message) String() string {
 		me = "Braodcast"
 	case ActionGraph:
 		me = "Graph"
+	case ActionFishMessage:
+		me = "FishMessage"
+	case ActionJoin:
+		me = "Join"
+	case ActionRandomWalk:
+		me = "RandomWalk"
 	}
+
 	switch m.Action {
 	case ActionSplitEdge, ActionMergeEdge, ActionRedirect:
 		me += "(" + m.Addr.String() + ", " + strconv.Itoa(int(m.Loc)) + ")"
@@ -94,6 +104,13 @@ func (m *Message) String() string {
 		me += "(" + m.Addr.String() + ", " + strconv.Itoa(int(m.Loc)) + ", " + string(m.Content) + ")"
 	case ActionGraph:
 		me += "(" + m.Addr.String() + ", " + strconv.Itoa(int(m.Loc)) + ", len=" + strconv.Itoa(len(m.Content)) + ")"
+	case ActionFishMessage:
+		me += "(" + strconv.Itoa(len(m.Content)) + ")"
+
+	case ActionJoin:
+		me += "(" + m.Addr.String() + ")"
+	case ActionRandomWalk:
+		me += "(" + m.Addr.String() + ", " + strconv.Itoa(len(m.Content)) + ")"
 	}
 	return me
 }
@@ -172,6 +189,26 @@ func NewGraphMessage(addr *Address, loc Location, content []byte) *Message {
 		Action:  ActionGraph,
 		Addr:    addr,
 		Loc:     loc,
+		Content: content,
+	}
+}
+
+func NewFishMessage(addr *Address, content []byte) *Message {
+	return &Message{
+		Action:  ActionFishMessage,
+		Content: content,
+	}
+}
+
+func NewJoinMessage(addr *Address) *Message {
+	return &Message{
+		Action: ActionJoin,
+	}
+}
+
+func NewRandomWalkMessage(addr *Address, content []byte) *Message {
+	return &Message{
+		Action:  ActionRandomWalk,
 		Content: content,
 	}
 }

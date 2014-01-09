@@ -50,7 +50,14 @@ func (c *Connection) SendMessage(msg *Message) error {
 		buf = append(buf, unparseAddress(msg.Addr)...)
 		buf = append(buf, unparseLocation(msg.Loc)...)
 		buf = append(buf, unparseContent(msg.Content)...)
+	case ActionFishMessage:
+		buf = append(buf, unparseFishAndWater(0, 0)...) //TODO: fish and water
+	case ActionJoin:
+		buf = append(buf, unparseAddress(msg.Addr)...)
+	case ActionRandomWalk:
+		buf = append(buf, unparseAddress(msg.Addr)...)
 	}
+
 	return writeN(c.c, buf)
 }
 

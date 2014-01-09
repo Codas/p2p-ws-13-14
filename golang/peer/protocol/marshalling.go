@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -37,6 +38,7 @@ func numBytes(length uint64) int {
 }
 
 func parseLength(br byteReader) (length uint64, err error) {
+
 	// read first byte
 	b, err := br.ReadByte()
 	if err != nil {
@@ -151,4 +153,51 @@ func readN(r io.Reader, length int) (b []byte, err error) {
 		return nil, errors.New("Read length missmatch!")
 	}
 	return buf, nil
+}
+
+func parseFishAndWater(br byteReader) (fish float32, water float32, err error) {
+	length, _ := parseLength(br)
+
+	if length != 16 {
+		err = errors.New("FishAndLengthParsing: Length != 16")
+		return
+	}
+
+	content, err := readN(br, int(length))
+
+	fishMantisse := readBytesAsInt(content[0:4])
+	fishExp := readBytesAsInt(content[4:8]) - 32768
+	waterMantisse := readBytesAsInt(content[8:12])
+	waterExp := readBytesAsInt(content[12:16]) - 32768
+
+	fish = float32(float64(fishMantisse) * math.Pow(float64(2), float64(fishExp)))
+	water = float32(float64(waterMantisse) * math.Pow(float64(2), float64(waterExp)))
+	return
+}
+
+func readBytesAsInt(buf []byte) int32 {
+	return int32(buf[0])<<24 + int32(buf[1])<<16 + int32(buf[2])<<8 + int32(buf[3])
+}
+
+func unparseFishAndWater(fish float32, water float32) []byte {
+	buf := make([]byte, 16)
+	writeDoubleToByteBuffer(buf[0:8], fish)
+	writeDoubleToByteBuffer(buf[8:16], water)
+
+	return buf
+}
+
+func writeDoubleToByteBuffer(buf []byte, f float32) {
+	tmp := strings.Split(strconv.FormatFloat(float64(f), 'b', -1, 32), "p")
+	mantisse, _ := strconv.ParseInt(tmp[0], 10, 32)
+	binaryExp, _ := strconv.ParseInt(tmp[1], 10, 32)
+	writeIntToByteBuffer(buf[0:4], mantisse)
+	writeIntToByteBuffer(buf[4:8], binaryExp+32768) // with bias
+}
+
+func writeIntToByteBuffer(buf []byte, n int64) {
+	buf[0] = byte((n >> 24) & 0xFF)
+	buf[1] = byte((n >> 16) & 0xFF)
+	buf[2] = byte((n >> 8) & 0xFF)
+	buf[3] = byte(n & 0xFF)
 }
