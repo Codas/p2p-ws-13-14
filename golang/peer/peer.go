@@ -5,11 +5,9 @@ import (
 	"net"
 	"os"
 	"sync"
-
-	p "../peer/protocol"
 )
 
-var nodes []*p.Node
+var nodes []*Node
 var m = new(sync.RWMutex)
 
 func accepter(l net.Listener) {
@@ -21,29 +19,29 @@ func accepter(l net.Listener) {
 		}
 		fmt.Printf("[Global] New Connection from %v\n", c.RemoteAddr())
 
-		_ = p.NewConnection(c, forwardConnection, nil)
+		_ = NewConnection(c, forwardConnection, nil)
 
 	}
 }
 
-func forwardConnection(c *p.Connection, msg *p.Message) {
+func forwardConnection(c *Connection, msg *Message) {
 	m.RLock()
 	defer m.RUnlock()
 
-	var n *p.Node
+	var n *Node
 	switch msg.Action {
-	case p.ActionHelloCW, p.ActionHelloCCW:
+	case ActionHelloCW, ActionHelloCCW:
 		for _, _n := range nodes {
 			if _n.Loc == msg.DstLoc {
 				n = _n
 				break
 			}
 		}
-	case p.ActionSplitEdge:
+	case ActionSplitEdge:
 		// looking for a node that is free
-		var freenodes []*p.Node
+		var freenodes []*Node
 		for _, n := range nodes {
-			if n.State == p.StateFree {
+			if n.State == StateFree {
 				freenodes = append(freenodes, n)
 			}
 		}
@@ -71,7 +69,7 @@ func forwardConnection(c *p.Connection, msg *p.Message) {
 }
 
 func createCycleNode() {
-	n := p.NewCycleNode(localAddress(), uniqueLocation(), removeNode, graphCallback)
+	n := NewCycleNode(localAddress(), uniqueLocation(), removeNode, graphCallback)
 	if n == nil {
 		return
 	}
@@ -90,18 +88,18 @@ func disconnectAllNodes() {
 	}
 }
 
-func uniqueLocation() p.Location {
+func uniqueLocation() Location {
 	m.RLock()
 	defer m.RUnlock()
 	length := len(nodes)
 
 	if length >= 255 {
 		fmt.Fprintln(os.Stderr, "WELL THAT ARE A FUCKTON OF NODES!")
-		return p.Location(r.Intn(255))
+		return Location(r.Intn(255))
 	}
 outer:
 	for {
-		l := p.Location(r.Intn(255))
+		l := Location(r.Intn(255))
 		for _, n := range nodes {
 			if l == n.Loc {
 				continue outer
@@ -112,11 +110,11 @@ outer:
 
 }
 
-func localAddress() *p.Address {
-	return p.NewAddress("127.0.0.1", *port)
+func localAddress() *Address {
+	return NewAddress("127.0.0.1", *port)
 }
 
-func removeNode(n *p.Node) {
+func removeNode(n *Node) {
 	m.Lock()
 	defer m.Unlock()
 	if len(nodes) == 0 {

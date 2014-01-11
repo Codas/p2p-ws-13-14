@@ -9,8 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	p "../peer/protocol"
 )
 
 var r = rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -146,7 +144,7 @@ type jsonEntry struct {
 	Id string
 }
 
-func writeJSONGraph(g []*p.NodeAttr) {
+func writeJSONGraph(g []*NodeAttr) {
 	var jG []jsonEntry
 	for _, n := range g {
 		jG = append(jG, jsonEntry{(strconv.Itoa(n.Addr.Port()) + ":" + strconv.Itoa(int(n.Loc)))})
@@ -172,7 +170,7 @@ func writeJSONGraph(g []*p.NodeAttr) {
 	}
 }
 
-func graphCallback(g []*p.NodeAttr) {
+func graphCallback(g []*NodeAttr) {
 	if ticker != nil {
 		writeJSONGraph(g)
 		return
@@ -221,10 +219,10 @@ func connectMany(text string) {
 		fmt.Fprintf(os.Stderr, "Parsing Error: Port (%s) is not a number\n", addrparts[2])
 		return
 	}
-	rAddr := p.NewAddress(addrparts[1], port)
+	rAddr := NewAddress(addrparts[1], port)
 
 	for i := 0; i < num; i++ {
-		n := p.NewNode(localAddress(), rAddr, uniqueLocation(), removeNode, graphCallback)
+		n := NewNode(localAddress(), rAddr, uniqueLocation(), removeNode, graphCallback)
 		if n == nil {
 			continue
 		}
@@ -246,9 +244,9 @@ func connectNewNode(addr string) {
 		fmt.Fprintf(os.Stderr, "Parsing Error: Port (%s) is not a number\n", addrparts[1])
 		return
 	}
-	rAddr := p.NewAddress(addrparts[0], port)
+	rAddr := NewAddress(addrparts[0], port)
 
-	n := p.NewNode(localAddress(), rAddr, uniqueLocation(), removeNode, graphCallback)
+	n := NewNode(localAddress(), rAddr, uniqueLocation(), removeNode, graphCallback)
 	if n == nil {
 		return
 	}
