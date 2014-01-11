@@ -56,7 +56,7 @@ func (c *Connection) SendMessage(msg *Message) error {
 		buf = append(buf, unparseAddress(msg.Addr)...)
 	case ActionRandomWalk:
 		buf = append(buf, unparseAddress(msg.Addr)...)
-		buf = append(buf, unparseHops(1)) // TODO: Calculate hops
+		buf = append(buf, unparseHops(1)...) // TODO: Calculate hops
 	}
 
 	return writeN(c.c, buf)
