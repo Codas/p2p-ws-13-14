@@ -132,15 +132,15 @@ func unparseLocation(l Location) []byte {
 	return buf
 }
 
-func parseHops(br byteReader) (h HopsLeft, err error) {
+func parseHops(br byteReader) (h Hops, err error) {
 	b, err := br.ReadByte()
 	if err != nil {
 		return 0, err
 	}
-	return HopsLeft(b), nil
+	return Hops(b), nil
 }
 
-func unparseHops(h HopsLeft) []byte {
+func unparseHops(h Hops) []byte {
 	buf := make([]byte, 1)
 	buf[0] = byte(h)
 	return buf

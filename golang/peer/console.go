@@ -3,18 +3,27 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"flag"
 	"fmt"
-	"math/rand"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 )
 
-var r = rand.New(rand.NewSource(time.Now().UnixNano()))
-var ticker *time.Ticker
+var port = flag.Int("p", 1337, "Port at which to listen")
 
-func parseStdIO() {
+func main() {
+	flag.Parse()
+
+	p := NewPeer(*port, graphCallback)
+
+	consoleLoop(p)
+
+	p.Shutdown()
+}
+
+func consoleLoop(p *Peer) {
 	scanner := bufio.NewScanner(os.Stdin)
 
 	for scanner.Scan() {
@@ -31,23 +40,23 @@ func parseStdIO() {
 		case "q":
 			return
 		case "l":
-			listNodes()
+			p.ListNodes()
 		case "cycle":
-			createCycleNode()
+			p.AddNode(nil)
 		case "c":
-			connectNewNode(args)
+			connectNewNode(p, args)
 		case "cm":
-			connectMany(args)
+			connectMany(p, args)
 		case "d":
-			disconnectNode(args)
+			disconnectNode(p, args)
 		case "da":
-			disconnectAllNodes()
+			p.DisconnectAllNodes()
 		case "b":
-			broadcastNode(args)
+			p.Broadcast(args)
 		case "g":
-			graphNode(args)
+			p.GenerateGraph()
 		case "gf":
-			graphFile(args)
+			togglePeriodicGraphFile(p, args)
 		}
 	}
 	if err := scanner.Err(); err != nil {
@@ -59,83 +68,98 @@ func printHelp() {
 	fmt.Println("HELP")
 	fmt.Println("- h (print this help)")
 	fmt.Println("- q (QUIT)")
-	fmt.Println("- l (list all peers, shows <#node>)")
+	fmt.Println("- l (list all nodes)")
 	fmt.Println("- cycle (create a node that points to itself)")
 	fmt.Println("- c <ip> <port> (connect new node to <ip> <port>)")
 	fmt.Println("- cm <num> <ip> <port> (connect many (num))")
-	fmt.Println("- d <#node> (disconnect <#node>)")
+	fmt.Println("- d [<#location>] (disconnect node on <#location>)")
 	fmt.Println("- da (disconnect all)")
-	fmt.Println("- b (<#node>) (broadcast on <#node>)")
-	fmt.Println("- g (<#node>) (generate graph on <#node>)")
-	fmt.Println("- gf (<intervall>) (periodically generate graph to file (in ms))")
-	//fmt.Println("- br <#node> <delay> (broadcast periodically on <#node> with <delay>)")
+	fmt.Println("- b <text> (broadcast <text>)")
+	fmt.Println("- g (generate graph)")
+	fmt.Println("- gf [<intervall>] (periodically generate graph to file (in ms))")
 }
 
-func listNodes() {
-	m.RLock()
-	defer m.RUnlock()
+func connectNewNode(p *Peer, text string) {
+	addr := ParseAddress(strings.Split(text, " "))
+	if addr == nil {
+		return
+	}
+	p.AddNode(addr)
+}
 
-	if len(nodes) == 0 {
-		fmt.Println("No nodes currently running")
+func connectMany(p *Peer, text string) {
+	parts := strings.Split(text, " ")
+	if len(parts) != 3 {
+		fmt.Fprintln(os.Stderr, "Error: parameter needs to have form '<num> <ip> <port>'")
 		return
 	}
 
-	for i, n := range nodes {
-		fmt.Printf("%d: %s\n", i, n)
+	num, err := strconv.Atoi(parts[0])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing: <num> (%s) is not a number\n", parts[0])
+		return
+	}
+
+	addr := ParseAddress(parts[1:])
+	if addr == nil {
+		return
+	}
+
+	for i := 0; i < num; i++ {
+		p.AddNode(addr)
 	}
 }
 
-func graphNode(sIdx string) {
-	m.RLock()
-	defer m.RUnlock()
-
-	idx := r.Intn(len(nodes))
-	if sIdx != "" {
-		var err error
-		idx, err = strconv.Atoi(sIdx)
+func disconnectNode(p *Peer, text string) {
+	loc := Location(255)
+	if text != "" {
+		idx, err := strconv.Atoi(text)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Parse Error: %s\n", err)
+			fmt.Fprintf(os.Stderr, "Error parsing: <#location> (%s) is not a number!\n", err)
 			return
 		}
-		if idx < 0 || idx >= len(nodes) {
-			fmt.Fprintf(os.Stderr, "Invalid <#node>, should be [0 - %d).\n", len(nodes))
+		if idx < 0 || idx >= 254 {
+			fmt.Fprintf(os.Stderr, "Invalid <#location>!\n")
 			return
 		}
+		loc = Location(idx)
 	}
 
-	nodes[idx].InitiateGraph()
+	if !p.DisconnectNode(loc) {
+		fmt.Fprintf(os.Stderr, "Invalid <#location>!\n")
+		return
+	}
 }
 
-func graphFile(sInterval string) {
+// graph ticker
+var ticker *time.Ticker
+
+func togglePeriodicGraphFile(p *Peer, sInterval string) {
+	// Stop ticker, if its already running
 	if ticker != nil {
 		ticker.Stop()
 		ticker = nil
 		fmt.Println("Deactivated periodic graph query")
 		return
 	}
-	intervall := 1000
+
+	// find out interval
+	interval := 1000
 	if sInterval != "" {
 		var err error
-		intervall, err = strconv.Atoi(sInterval)
+		interval, err = strconv.Atoi(sInterval)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Parse Error: %s\n", err)
 			return
 		}
 	}
 
-	fmt.Printf("Activating periodic graph query (intervall: %d ms)", intervall)
-	ticker = time.NewTicker(time.Duration(intervall) * time.Millisecond)
+	// periodically generate graph
+	fmt.Printf("Activating periodic graph query (interval: %d ms)", interval)
+	ticker = time.NewTicker(time.Duration(interval) * time.Millisecond)
 	go func(t *time.Ticker) {
 		for _ = range t.C {
-			m.RLock()
-			if len(nodes) == 0 {
-				return
-			}
-
-			//idx := r.Intn(len(nodes))
-			idx := 0
-			nodes[idx].InitiateGraph()
-			m.RUnlock()
+			p.GenerateGraph()
 		}
 	}(ticker)
 }
@@ -147,25 +171,25 @@ type jsonEntry struct {
 func writeJSONGraph(g []*NodeAttr) {
 	var jG []jsonEntry
 	for _, n := range g {
-		jG = append(jG, jsonEntry{(strconv.Itoa(n.Addr.Port()) + ":" + strconv.Itoa(int(n.Loc)))})
+		jG = append(jG, jsonEntry{strconv.Itoa(n.Addr.Port()) + ":" + strconv.Itoa(int(n.Loc))})
 	}
 
 	data, err := json.Marshal(&jG)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "JSON Marshal Error: %s\n", err)
+		fmt.Fprintf(os.Stderr, "Error marshalling JSON: %s\n", err)
 		return
 	}
 
 	f, err := os.Create("graph.json")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "File Creation Error: %s\n", err)
+		fmt.Fprintf(os.Stderr, "Error creating file: %s\n", err)
 		return
 	}
 	defer f.Close()
 
 	_, err = f.Write(data)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "File Writing Error: %s\n", err)
+		fmt.Fprintf(os.Stderr, "Error writing file: %s\n", err)
 		return
 	}
 }
@@ -180,99 +204,4 @@ func graphCallback(g []*NodeAttr) {
 		fmt.Print(" -> (", n.Addr.Port(), ":", n.Loc, ")")
 	}
 	fmt.Print("\n")
-}
-
-func broadcastNode(sIdx string) {
-	m.RLock()
-	defer m.RUnlock()
-
-	idx := r.Intn(len(nodes))
-	if sIdx != "" {
-		var err error
-		idx, err = strconv.Atoi(sIdx)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Parse Error: %s\n", err)
-			return
-		}
-		if idx < 0 || idx >= len(nodes) {
-			fmt.Fprintf(os.Stderr, "Invalid <#node>, should be [0 - %d).\n", len(nodes))
-			return
-		}
-	}
-
-	nodes[idx].InitiateBroadcast()
-}
-
-func connectMany(text string) {
-	addrparts := strings.Split(text, " ")
-	if len(addrparts) != 3 {
-		fmt.Fprintln(os.Stderr, "Parameter does not have form 'num ip port'")
-		return
-	}
-	num, err := strconv.Atoi(addrparts[0])
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Parsing Error: Num (%s) is not a number\n", addrparts[2])
-		return
-	}
-	port, err := strconv.Atoi(addrparts[2])
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Parsing Error: Port (%s) is not a number\n", addrparts[2])
-		return
-	}
-	rAddr := NewAddress(addrparts[1], port)
-
-	for i := 0; i < num; i++ {
-		n := NewNode(localAddress(), rAddr, uniqueLocation(), removeNode, graphCallback)
-		if n == nil {
-			continue
-		}
-
-		m.Lock()
-		nodes = append(nodes, n)
-		m.Unlock()
-	}
-}
-
-func connectNewNode(addr string) {
-	addrparts := strings.Split(addr, " ")
-	if len(addrparts) != 2 {
-		fmt.Fprintln(os.Stderr, "Parameter does not have form 'ip port'")
-		return
-	}
-	port, err := strconv.Atoi(addrparts[1])
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Parsing Error: Port (%s) is not a number\n", addrparts[1])
-		return
-	}
-	rAddr := NewAddress(addrparts[0], port)
-
-	n := NewNode(localAddress(), rAddr, uniqueLocation(), removeNode, graphCallback)
-	if n == nil {
-		return
-	}
-
-	m.Lock()
-	nodes = append(nodes, n)
-	m.Unlock()
-}
-
-func disconnectNode(sIdx string) {
-	m.RLock()
-	defer m.RUnlock()
-
-	idx := r.Intn(len(nodes))
-	if sIdx != "" {
-		var err error
-		idx, err = strconv.Atoi(sIdx)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Parse Error: %s\n", err)
-			return
-		}
-		if idx < 0 || idx >= len(nodes) {
-			fmt.Fprintf(os.Stderr, "Invalid <#node>, should be [0 - %d).\n", len(nodes))
-			return
-		}
-	}
-
-	nodes[idx].InitiateMergeEdge()
 }

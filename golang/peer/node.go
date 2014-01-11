@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	// message actions
+	// node states
 	StateFree = iota
 	StateSplitting
 	StateMerging
@@ -146,13 +146,13 @@ func (n *Node) InitiateGraph() {
 	n.sendNext(NewGraphMessage(n.Addr, n.Loc, content))
 }
 
-func (n *Node) InitiateBroadcast() {
+func (n *Node) InitiateBroadcast(text string) {
 	n.m.Lock()
 	defer n.m.Unlock()
 	fmt.Println("----------------------------------------")
 	fmt.Println(n)
 	fmt.Printf("[Node#%d] Initiating Broadcast\n", n.Loc)
-	n.sendNext(NewBroadcastMessage(n.Addr, n.Loc, []byte("test")))
+	n.sendNext(NewBroadcastMessage(n.Addr, n.Loc, []byte(text)))
 }
 
 func (n *Node) InitiateMergeEdge() {

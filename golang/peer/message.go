@@ -1,8 +1,6 @@
 package main
 
-import (
-	"strconv"
-)
+import "strconv"
 
 const (
 	// message actions
@@ -31,31 +29,7 @@ type Action int
 type Location uint8
 type FishCarry float32
 type WaterCarry float32
-type HopsLeft uint8
-
-type Address struct {
-	ip   string
-	port int
-}
-
-func (a *Address) IP() string {
-	return a.ip
-}
-
-func (a *Address) Port() int {
-	return a.port
-}
-
-func NewAddress(ip string, port int) *Address {
-	if ip == "localhost" {
-		ip = "127.0.0.1"
-	}
-	return &Address{ip, port}
-}
-
-func (a *Address) String() string {
-	return a.ip + ":" + strconv.Itoa(a.port)
-}
+type Hops uint8
 
 // Package type
 type Message struct {
@@ -66,7 +40,7 @@ type Message struct {
 	DstLoc  Location
 	Fish    FishCarry
 	Water   WaterCarry
-	Hops    HopsLeft
+	Hops    Hops
 	Content []byte
 }
 
@@ -90,11 +64,11 @@ func (m *Message) String() string {
 	case ActionShutdown:
 		me = "Shutdown"
 	case ActionBroadcast:
-		me = "Braodcast"
+		me = "Broadcast"
 	case ActionGraph:
 		me = "Graph"
 	case ActionFishMessage:
-		me = "FishMessage"
+		me = "Fish"
 	case ActionJoin:
 		me = "Join"
 	case ActionRandomWalk:
@@ -213,7 +187,7 @@ func NewJoinMessage(addr *Address) *Message {
 	}
 }
 
-func NewRandomWalkMessage(addr *Address, hops HopsLeft) *Message {
+func NewRandomWalkMessage(addr *Address, hops Hops) *Message {
 	return &Message{
 		Action: ActionRandomWalk,
 		Hops:   hops,

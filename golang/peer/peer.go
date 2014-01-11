@@ -2,36 +2,164 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
 	"net"
 	"os"
+	"strconv"
 	"sync"
+	"time"
 )
 
-var nodes []*Node
-var m = new(sync.RWMutex)
+var r = rand.New(rand.NewSource(time.Now().UnixNano()))
 
-func accepter(l net.Listener) {
+type Peer struct {
+	l    net.Listener
+	addr *Address
+
+	nodes []*Node
+	m     *sync.RWMutex
+
+	graphCallback func(g []*NodeAttr)
+
+	shutdown bool
+	done     chan bool
+}
+
+func NewPeer(port int, graphCallback func(g []*NodeAttr)) *Peer {
+	l, err := net.Listen("tcp", ":"+strconv.Itoa(port))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Listening Error: %s\n", err)
+		return nil
+	}
+	fmt.Printf("[Global] Started listening on %v\n", l.Addr())
+
+	p := &Peer{
+		addr:          NewAddress("127.0.0.1", port),
+		m:             new(sync.RWMutex),
+		done:          make(chan bool),
+		graphCallback: graphCallback,
+	}
+
+	go p.acceptLoop()
+
+	return p
+}
+
+// if addr = nil, we add a cycle node
+func (p *Peer) AddNode(addr *Address) {
+	var n *Node
+	if addr == nil {
+		n = NewCycleNode(p.addr, p.uniqueLocation(), p.removeNode, p.graphCallback)
+	} else {
+		n = NewNode(p.addr, addr, p.uniqueLocation(), p.removeNode, p.graphCallback)
+	}
+	if n == nil {
+		return
+	}
+
+	p.m.Lock()
+	p.nodes = append(p.nodes, n)
+	p.m.Unlock()
+}
+
+func (p *Peer) DisconnectNode(l Location) bool {
+	p.m.RLock()
+	defer p.m.RUnlock()
+
+	// disconnect random node
+	if l == 255 {
+		p.nodes[r.Intn(len(p.nodes))].InitiateMergeEdge()
+		return true
+	}
+
+	for _, n := range p.nodes {
+		if n.Loc == l {
+			n.InitiateMergeEdge()
+			return true
+		}
+	}
+	return false
+}
+
+func (p *Peer) DisconnectAllNodes() {
+	p.m.RLock()
+	defer p.m.RUnlock()
+
+	for _, n := range p.nodes {
+		n.InitiateMergeEdge()
+	}
+}
+
+func (p *Peer) ListNodes() {
+	p.m.RLock()
+	defer p.m.RUnlock()
+
+	if len(p.nodes) == 0 {
+		fmt.Println("[Global] No nodes currently active")
+		return
+	}
+
+	for _, n := range p.nodes {
+		fmt.Printf(" - %s\n", n)
+	}
+}
+
+func (p *Peer) Broadcast(text string) {
+	p.m.RLock()
+	defer p.m.RUnlock()
+
+	if len(p.nodes) == 0 {
+		return
+	}
+
+	p.nodes[0].InitiateBroadcast(text)
+}
+
+func (p *Peer) GenerateGraph() {
+	p.m.RLock()
+	defer p.m.RUnlock()
+
+	if len(p.nodes) == 0 {
+		return
+	}
+
+	p.nodes[0].InitiateGraph()
+}
+
+func (p *Peer) Shutdown() {
+	defer p.l.Close()
+
+	p.m.Lock()
+	if len(p.nodes) == 0 {
+		return
+	}
+	p.shutdown = true
+	p.m.Unlock()
+	p.DisconnectAllNodes()
+	<-p.done
+}
+
+func (p *Peer) acceptLoop() {
 	for {
-		c, err := l.Accept()
+		c, err := p.l.Accept()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Accept Error: %s\n", err)
 			return
 		}
 		fmt.Printf("[Global] New Connection from %v\n", c.RemoteAddr())
 
-		_ = NewConnection(c, forwardConnection, nil)
-
+		NewConnection(c, p.handleIncomingConnection, nil)
 	}
 }
 
-func forwardConnection(c *Connection, msg *Message) {
-	m.RLock()
-	defer m.RUnlock()
+func (p *Peer) handleIncomingConnection(c *Connection, msg *Message) {
+	p.m.RLock()
+	defer p.m.RUnlock()
 
 	var n *Node
 	switch msg.Action {
 	case ActionHelloCW, ActionHelloCCW:
-		for _, _n := range nodes {
+		for _, _n := range p.nodes {
 			if _n.Loc == msg.DstLoc {
 				n = _n
 				break
@@ -40,7 +168,7 @@ func forwardConnection(c *Connection, msg *Message) {
 	case ActionSplitEdge:
 		// looking for a node that is free
 		var freenodes []*Node
-		for _, n := range nodes {
+		for _, n := range p.nodes {
 			if n.State == StateFree {
 				freenodes = append(freenodes, n)
 			}
@@ -68,39 +196,18 @@ func forwardConnection(c *Connection, msg *Message) {
 	n.MessageCallback(c, msg)
 }
 
-func createCycleNode() {
-	n := NewCycleNode(localAddress(), uniqueLocation(), removeNode, graphCallback)
-	if n == nil {
-		return
-	}
+func (p *Peer) uniqueLocation() Location {
+	p.m.RLock()
+	defer p.m.RUnlock()
 
-	m.Lock()
-	nodes = append(nodes, n)
-	m.Unlock()
-}
-
-func disconnectAllNodes() {
-	m.RLock()
-	defer m.RUnlock()
-
-	for _, n := range nodes {
-		n.InitiateMergeEdge()
-	}
-}
-
-func uniqueLocation() Location {
-	m.RLock()
-	defer m.RUnlock()
-	length := len(nodes)
-
-	if length >= 255 {
+	if len(p.nodes) >= 255 {
 		fmt.Fprintln(os.Stderr, "WELL THAT ARE A FUCKTON OF NODES!")
 		return Location(r.Intn(255))
 	}
 outer:
 	for {
 		l := Location(r.Intn(255))
-		for _, n := range nodes {
+		for _, n := range p.nodes {
 			if l == n.Loc {
 				continue outer
 			}
@@ -110,24 +217,20 @@ outer:
 
 }
 
-func localAddress() *Address {
-	return NewAddress("127.0.0.1", *port)
-}
-
-func removeNode(n *Node) {
-	m.Lock()
-	defer m.Unlock()
-	if len(nodes) == 0 {
+func (p *Peer) removeNode(n *Node) {
+	p.m.Lock()
+	defer p.m.Unlock()
+	if len(p.nodes) == 0 {
 		return
 	}
-	for i, _n := range nodes {
+	for i, _n := range p.nodes {
 		if _n == n {
-			nodes[i] = nodes[len(nodes)-1]
-			nodes = nodes[:len(nodes)-1]
+			p.nodes[i] = p.nodes[len(p.nodes)-1]
+			p.nodes = p.nodes[:len(p.nodes)-1]
 		}
 	}
 
-	if shuttingDown && len(nodes) == 0 {
-		done <- true
+	if p.shutdown && len(p.nodes) == 0 {
+		p.done <- true
 	}
 }
