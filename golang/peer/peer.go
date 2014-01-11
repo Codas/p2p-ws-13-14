@@ -19,13 +19,13 @@ type Peer struct {
 	nodes []*Node
 	m     *sync.RWMutex
 
-	graphCallback func(g []*NodeAttr)
+	graphCB GraphCallbackFunc
 
 	shutdown bool
 	done     chan bool
 }
 
-func NewPeer(port int, graphCallback func(g []*NodeAttr)) *Peer {
+func NewPeer(port int, graph GraphCallbackFunc) *Peer {
 	l, err := net.Listen("tcp", ":"+strconv.Itoa(port))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Listening Error: %s\n", err)
@@ -34,10 +34,10 @@ func NewPeer(port int, graphCallback func(g []*NodeAttr)) *Peer {
 	fmt.Printf("[Global] Started listening on %v\n", l.Addr())
 
 	p := &Peer{
-		addr:          NewAddress("127.0.0.1", port),
-		m:             new(sync.RWMutex),
-		done:          make(chan bool),
-		graphCallback: graphCallback,
+		addr:    NewAddress("127.0.0.1", port),
+		m:       new(sync.RWMutex),
+		done:    make(chan bool),
+		graphCB: graph,
 	}
 
 	go p.acceptLoop()
@@ -49,9 +49,9 @@ func NewPeer(port int, graphCallback func(g []*NodeAttr)) *Peer {
 func (p *Peer) AddNode(addr *Address) {
 	var n *Node
 	if addr == nil {
-		n = NewCycleNode(p.addr, p.uniqueLocation(), p.removeNode, p.graphCallback)
+		n = NewCycleNode(p.addr, p.uniqueLocation(), p.removeNode, p.graphCB)
 	} else {
-		n = NewNode(p.addr, addr, p.uniqueLocation(), p.removeNode, p.graphCallback)
+		n = NewNode(p.addr, addr, p.uniqueLocation(), p.removeNode, p.graphCB)
 	}
 	if n == nil {
 		return

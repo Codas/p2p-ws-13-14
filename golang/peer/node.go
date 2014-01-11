@@ -23,6 +23,9 @@ const RETRY_DELAY = 1 * time.Second
 
 type NodeState int
 
+type CleanCallbackFunc func(*Node)
+type GraphCallbackFunc func(g []*NodeAttr)
+
 func (n NodeState) String() string {
 	switch n {
 	case StateFree:
@@ -72,25 +75,26 @@ type Node struct {
 	NextNode  *remoteNode
 	PrevNode  *remoteNode
 
-	cleanF func(*Node)
-	graphF func([]*NodeAttr)
-	m      *sync.Mutex
+	cleanCB CleanCallbackFunc
+	graphCB GraphCallbackFunc
+
+	m *sync.Mutex
 }
 
-func NewNode(lAddr *Address, rAddr *Address, loc Location, clean func(*Node), graph func(g []*NodeAttr)) *Node {
+func NewNode(lAddr *Address, rAddr *Address, loc Location, clean CleanCallbackFunc, graph GraphCallbackFunc) *Node {
 	n := &Node{
-		State:  StateDone,
-		Addr:   lAddr,
-		Loc:    loc,
-		cleanF: clean,
-		graphF: graph,
-		m:      new(sync.Mutex),
+		State:   StateDone,
+		Addr:    lAddr,
+		Loc:     loc,
+		cleanCB: clean,
+		graphCB: graph,
+		m:       new(sync.Mutex),
 	}
 
 	return n.initiateSplitEdge(rAddr)
 }
 
-func NewCycleNode(lAddr *Address, loc Location, clean func(*Node), graph func(g []*NodeAttr)) *Node {
+func NewCycleNode(lAddr *Address, loc Location, clean CleanCallbackFunc, graph GraphCallbackFunc) *Node {
 	c, err := connectTo(lAddr)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "NewCycleNode: Dial Error: %s\n", err)
@@ -98,12 +102,12 @@ func NewCycleNode(lAddr *Address, loc Location, clean func(*Node), graph func(g 
 	}
 
 	n := &Node{
-		State:  StateSplitting,
-		Addr:   lAddr,
-		Loc:    loc,
-		cleanF: clean,
-		graphF: graph,
-		m:      new(sync.Mutex),
+		State:   StateSplitting,
+		Addr:    lAddr,
+		Loc:     loc,
+		cleanCB: clean,
+		graphCB: graph,
+		m:       new(sync.Mutex),
 	}
 	fmt.Printf("[Node#%d] NewCycleNode -> Connected to %s\n", n.Loc, c.Remote())
 
@@ -281,7 +285,7 @@ func (n *Node) MessageCallback(c *Connection, m *Message) {
 				n.PrevNode.c.Close()
 				n.NextNode.c.Close()
 				n.setState(StateDone)
-				n.cleanF(n)
+				n.cleanCB(n)
 			} else if n.State == StateFree {
 				c, err := connectTo(m.Addr)
 				if err != nil {
@@ -358,7 +362,7 @@ func (n *Node) MessageCallback(c *Connection, m *Message) {
 			n.PrevNode.c.Close()
 			n.NextNode.c.Close()
 			n.setState(StateDone)
-			n.cleanF(n)
+			n.cleanCB(n)
 		} else {
 			fmt.Printf("[Node#%d] Could not handle msg\n", n.Loc)
 		}
@@ -389,7 +393,7 @@ func (n *Node) MessageCallback(c *Connection, m *Message) {
 					}
 					graph = append(graph, &NodeAttr{addr, loc})
 				}
-				n.graphF(graph)
+				n.graphCB(graph)
 			}
 		} else {
 			content := m.Content
