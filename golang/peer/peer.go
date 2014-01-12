@@ -162,8 +162,10 @@ func (p *Peer) fishLoop() {
 		// calculate degree (collect all real neighbour addresses)
 		var addresses []*Address
 		for _, n := range p.nodes {
-			addresses = p.addUniqueAddress(addresses, n.PrevNode.addr)
-			addresses = p.addUniqueAddress(addresses, n.NextNode.addr)
+			if n.State == StateFree {
+				addresses = p.addUniqueAddress(addresses, n.PrevNode.addr)
+				addresses = p.addUniqueAddress(addresses, n.NextNode.addr)
+			}
 		}
 		if len(addresses) != 0 {
 			waterpart := p.water / float32(len(addresses)+1)
@@ -175,12 +177,14 @@ func (p *Peer) fishLoop() {
 			// atm send only to different peers
 			address := addresses[r.Intn(len(addresses))]
 			for _, n := range p.nodes {
-				if n.PrevNode.addr == address {
-					n.sendPrev(NewFishMessage(waterpart, fishpart, p.strength))
-					break
-				} else if n.NextNode.addr == address {
-					n.sendNext(NewFishMessage(waterpart, fishpart, p.strength))
-					break
+				if n.State == StateFree {
+					if n.PrevNode.addr == address {
+						n.sendPrev(NewFishMessage(waterpart, fishpart, p.strength))
+						break
+					} else if n.NextNode.addr == address {
+						n.sendNext(NewFishMessage(waterpart, fishpart, p.strength))
+						break
+					}
 				}
 			}
 		}
