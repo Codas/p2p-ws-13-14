@@ -143,7 +143,7 @@ func startupClient(port int, locations int) (c *Client, err error) {
 	}
 
 	fmt.Printf("#%d Starting [%s -p %d -v %d] ..\n", port, *executable, port, *verbosity)
-	c.cmd = exec.Command(*executable, "-p", fmt.Sprint(port), "-v", *verbosity)
+	c.cmd = exec.Command(*executable, "-p", fmt.Sprint(port), "-v", fmt.Sprint(*verbosity))
 	setSysProcAttr(c.cmd)
 
 	outPipe, err := c.cmd.StdoutPipe()
@@ -179,7 +179,8 @@ func startupClient(port int, locations int) (c *Client, err error) {
 		c.sendCommand("cycle")
 	} else {
 		for i := 0; i < locations; i++ {
-			p := pool[rand.Intn(len(pool))]
+			// always connect on the same node to test random walk
+			p := pool[0] //pool[rand.Intn(len(pool))]
 			c.sendCommand(fmt.Sprintf("c :%d", p.port))
 		}
 	}
