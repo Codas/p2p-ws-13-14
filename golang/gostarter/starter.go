@@ -16,10 +16,7 @@ import (
 
 var (
 	port       = flag.Int("p", 9000, "first port of a range, where clients listen on")
-	clients    = flag.Int("c", 3, "Number of clients to start")
-	locations  = flag.Int("l", 1, "Number of locations per client in ring")
-	executable = flag.String("x", "peer.exe", "Executable file that starts a peer")
-	graph      = flag.Bool("g", false, "Let first Peer execute a graph generation")
+	executable = flag.String("x", "../peer/peer.exe", "Executable file that starts a peer")
 	delay      = flag.Int("d", 0, "Delay in ms between starting of peers")
 )
 
@@ -45,7 +42,8 @@ func (c *Client) sendCommand(cmd string) {
 func main() {
 	flag.Parse()
 
-	startupClients(*clients, *locations)
+	startupClients(1, 1)
+
 	consoleLoop()
 
 	// shut down
@@ -78,12 +76,12 @@ func consoleLoop() {
 		case "l":
 			listClients()
 		case "n":
-			var num int
-			if _, err := fmt.Sscan(args, &num); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: parameter needs to have form '<num>' (%s)\n", err)
+			var num, nodes int
+			if _, err := fmt.Sscan(args, &num, &nodes); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: parameter needs to have form '<num> <nodes>' (%s)\n", err)
 				return
 			}
-			startupClients(num, *locations)
+			startupClients(num, nodes)
 		case "s":
 			var num int
 			if _, err := fmt.Sscan(args, &num); err != nil {
@@ -111,14 +109,14 @@ func printHelp() {
 	fmt.Println("- h (print this help)")
 	fmt.Println("- q (QUIT)")
 	fmt.Println("- l (list peer ports)")
-	fmt.Println("- n <num> (start <num> new peers>)")
+	fmt.Println("- n <num> <nodes> (start <num> new peers with <nodes> nodes each)")
 	fmt.Println("- s <num> (shutdown <num> peers)")
 	fmt.Println("- c <port> <cmd> (send <cmd> to peer with <port>)")
 }
 
 func startupClients(clients, locations int) {
 	for i := 0; i < clients; i++ {
-		c, err := startupClient(*port)
+		c, err := startupClient(*port, locations)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "Error during client startup:", err)
 			continue
@@ -134,7 +132,7 @@ func startupClients(clients, locations int) {
 	}
 }
 
-func startupClient(port int) (c *Client, err error) {
+func startupClient(port int, locations int) (c *Client, err error) {
 	c = &Client{
 		port: port,
 	}
@@ -174,12 +172,8 @@ func startupClient(port int) (c *Client, err error) {
 	m.RLock()
 	if len(pool) == 0 {
 		c.sendCommand("cycle")
-	}
-	if len(pool) == 0 && *graph {
-		c.sendCommand("gf")
-	}
-	if len(pool) > 0 {
-		for i := 0; i < *locations; i++ {
+	} else {
+		for i := 0; i < locations; i++ {
 			p := pool[rand.Intn(len(pool))]
 			c.sendCommand(fmt.Sprintf("c :%d", p.port))
 		}
@@ -193,8 +187,7 @@ func printReader(port int, r io.Reader, w io.Writer) {
 	scanner := bufio.NewScanner(r)
 
 	for scanner.Scan() {
-		text := scanner.Text()
-		fmt.Fprintf(w, "[%d] %s\n", port, text)
+		fmt.Fprintf(w, "[%d] %s\n", port, scanner.Text())
 	}
 }
 
