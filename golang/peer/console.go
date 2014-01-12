@@ -47,6 +47,8 @@ func consoleLoop(p *Peer) {
 			p.ListNodes()
 		case "cycle":
 			p.AddNode(nil)
+		case "check":
+			p.CheckNodes()
 		case "c":
 			connectNewNode(p, args)
 		case "cm":
@@ -75,6 +77,7 @@ func printHelp() {
 	fmt.Println("- v <level> (set verbosity level [2 = all, 1 = only peer])")
 	fmt.Println("- l (list all nodes)")
 	fmt.Println("- cycle (create a node that points to itself)")
+	fmt.Println("- check (check neighbors)")
 	fmt.Println("- c <ip:port> (connect new node to <ip:port>)")
 	fmt.Println("- cm <num> <ip:port> (connect <num> nodes to <ip:port>)")
 	fmt.Println("- d [<#location>] (disconnect node on <#location>)")
@@ -150,7 +153,7 @@ func togglePeriodicGraphFile(p *Peer, text string) {
 	}
 
 	// find out interval
-	interval := 1000
+	interval := 5000
 	if text != "" {
 		if _, err := fmt.Sscan(text, &interval); err != nil {
 			fmt.Fprintf(os.Stderr, "Error parsing <interval>: (%s)!\n", err)
@@ -218,8 +221,8 @@ func writeDOTGraphs(g []*NodeAttr) {
 	fG.WriteString("digraph p2p {\n")
 	fM.WriteString("digraph p2p {\n")
 	for _, n := range g {
-		fG.WriteString(fmt.Sprintf("%d_%d", n.Addr.Port, n.Loc))
-		fM.WriteString(fmt.Sprintf("%d", n.Addr.Port))
+		fG.WriteString(fmt.Sprintf("N%d_%d", n.Addr.Port, n.Loc))
+		fM.WriteString(fmt.Sprintf("N%d", n.Addr.Port))
 
 		fG.WriteString(" -> ")
 		fM.WriteString(" -> ")

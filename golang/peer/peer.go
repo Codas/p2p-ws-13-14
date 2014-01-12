@@ -112,6 +112,25 @@ func (p *Peer) DisconnectAllNodes() {
 	}
 }
 
+func (p *Peer) CheckNodes() {
+	p.m.RLock()
+	defer p.m.RUnlock()
+
+	if len(p.nodes) == 0 {
+		fmt.Println("[Global] No nodes currently active")
+		return
+	}
+
+	for _, n := range p.nodes {
+		if n.PrevNode == nil || n.PrevNode.c == nil {
+			fmt.Println(fmt.Sprintf("[Global] NODE PREV IS NIL: %s", n))
+		}
+		if n.NextNode == nil || n.NextNode.c == nil {
+			fmt.Println(fmt.Sprintf("[Global] NODE NEXT IS NIL: %s", n))
+		}
+	}
+}
+
 func (p *Peer) ListNodes() {
 	p.m.RLock()
 	defer p.m.RUnlock()
