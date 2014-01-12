@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"math/rand"
 	"net"
@@ -13,6 +14,8 @@ const HYSTERESIS = 0.5
 const FISH_INTERVAL = 1000 * time.Millisecond
 
 var r = rand.New(rand.NewSource(time.Now().UnixNano()))
+
+type GraphCallbackFunc func([]*NodeAttr)
 
 type Peer struct {
 	l    net.Listener
@@ -67,9 +70,9 @@ func NewPeer(port int, graph GraphCallbackFunc) *Peer {
 func (p *Peer) AddNode(addr *Address) {
 	var n *Node
 	if addr == nil {
-		n = NewCycleNode(p.addr, p.uniqueLocation(), p.removeNode, p.graphCB, p.fishCB)
+		n = NewCycleNode(p.addr, p.uniqueLocation(), p.removeNode, p.messageCB)
 	} else {
-		n = NewNode(p.addr, addr, p.uniqueLocation(), p.removeNode, p.graphCB, p.fishCB)
+		n = NewNode(p.addr, addr, p.uniqueLocation(), p.removeNode, p.messageCB)
 	}
 	if n == nil {
 		return
@@ -167,6 +170,41 @@ func (p *Peer) SetVerbosityLevel(level int) {
 	}
 }
 
+func (p *Peer) messageCB(n *Node, m *Message) {
+	switch m.Action {
+	case ActionBroadcast:
+		p.println(fmt.Sprintf("[Global] [BROADCAST] %s", string(m.Content)))
+	case ActionGraph:
+		var graph []*NodeAttr
+		b := bytes.NewReader(m.Content)
+		for {
+			addr, err := parseAddress(b)
+			if err != nil {
+				break
+			}
+			loc, err := parseLocation(b)
+			if err != nil {
+				break
+			}
+			graph = append(graph, &NodeAttr{addr, loc})
+		}
+		p.graphCB(graph)
+	case ActionFish:
+		p.water += m.Water
+		if p.strength < m.Strength {
+			p.strength = m.Strength
+			p.fish = m.Fish
+		} else if p.strength == m.Strength {
+			p.fish += m.Fish
+		} else {
+			// discard arriving fish
+		}
+		// apply HYSTERESIS to new estimated networksize
+		p.networksize = p.networksize*(1-HYSTERESIS) + p.water/p.fish*HYSTERESIS
+		p.println(fmt.Sprintf("[Global] [FISH] new n=%.2f [w=%.3f/f=%.3f]", p.networksize, p.water, p.fish))
+	}
+}
+
 func (p *Peer) fishLoop() {
 	// TODO: perhaps adjust timer -> race to equilibrium?
 	p.fishticker = time.NewTicker(FISH_INTERVAL)
@@ -215,21 +253,6 @@ func (p *Peer) addUniqueAddress(addresses []*Address, address *Address) []*Addre
 		}
 	}
 	return append(addresses, address)
-}
-
-func (p *Peer) fishCB(water, fish float32, strength uint32) {
-	p.water += water
-	if p.strength < strength {
-		p.strength = strength
-		p.fish = fish
-	} else if p.strength == strength {
-		p.fish += fish
-	} else {
-		// discard arriving fish
-	}
-	// apply HYSTERESIS to new estimated networksize
-	p.networksize = p.networksize*(1-HYSTERESIS) + p.water/p.fish*HYSTERESIS
-	p.println(fmt.Sprintf("[Global] [FISH] new n=%.2f [w=%.3f/f=%.3f]", p.networksize, p.water, p.fish))
 }
 
 func (p *Peer) acceptLoop() {

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"math/rand"
 	"os"
@@ -12,8 +11,7 @@ import (
 const RETRY_DELAY = 1 * time.Second
 
 type CleanCallbackFunc func(*Node)
-type GraphCallbackFunc func([]*NodeAttr)
-type FishCallbackFunc func(float32, float32, uint32)
+type NodeMessageCallbackFunc func(*Node, *Message)
 
 const (
 	// node states
@@ -75,23 +73,21 @@ type Node struct {
 	PrevNode  *remoteNode
 	m         *sync.Mutex
 
-	cleanCB CleanCallbackFunc
-	graphCB GraphCallbackFunc
-	fishCB  FishCallbackFunc
+	cleanCB   CleanCallbackFunc
+	messageCB NodeMessageCallbackFunc
 
 	v bool // verbose
 }
 
-func NewNode(lAddr *Address, rAddr *Address, loc Location, clean CleanCallbackFunc, graph GraphCallbackFunc, fish FishCallbackFunc) *Node {
+func NewNode(lAddr *Address, rAddr *Address, loc Location, clean CleanCallbackFunc, message NodeMessageCallbackFunc) *Node {
 	n := &Node{
 		State: StateDone,
 		Addr:  lAddr,
 		Loc:   loc,
 		m:     new(sync.Mutex),
 
-		cleanCB: clean,
-		graphCB: graph,
-		fishCB:  fish,
+		cleanCB:   clean,
+		messageCB: message,
 
 		v: true,
 	}
@@ -99,16 +95,15 @@ func NewNode(lAddr *Address, rAddr *Address, loc Location, clean CleanCallbackFu
 	return n.initiateSplitEdge(rAddr)
 }
 
-func NewCycleNode(lAddr *Address, loc Location, clean CleanCallbackFunc, graph GraphCallbackFunc, fish FishCallbackFunc) *Node {
+func NewCycleNode(lAddr *Address, loc Location, clean CleanCallbackFunc, message NodeMessageCallbackFunc) *Node {
 	n := &Node{
 		State: StateSplitting,
 		Addr:  lAddr,
 		Loc:   loc,
 		m:     new(sync.Mutex),
 
-		cleanCB: clean,
-		graphCB: graph,
-		fishCB:  fish,
+		cleanCB:   clean,
+		messageCB: message,
 
 		v: true,
 	}
@@ -384,23 +379,11 @@ func (n *Node) MessageCallback(c *Connection, m *Message) {
 		} else if n.PrevNode.isConn(c) {
 			n.sendNext(m)
 		}
+		n.messageCB(n, m)
 	case ActionGraph:
 		if *m.Addr == *n.Addr && m.Loc == n.Loc {
 			// we sent this graph request, it's complete
-			var graph []*NodeAttr
-			b := bytes.NewReader(m.Content)
-			for {
-				addr, err := parseAddress(b)
-				if err != nil {
-					break
-				}
-				loc, err := parseLocation(b)
-				if err != nil {
-					break
-				}
-				graph = append(graph, &NodeAttr{addr, loc})
-			}
-			n.graphCB(graph)
+			n.messageCB(n, m)
 		} else {
 			content := m.Content
 			content = append(content, unparseAddress(n.Addr)...)
@@ -412,7 +395,7 @@ func (n *Node) MessageCallback(c *Connection, m *Message) {
 			}
 		}
 	case ActionFish:
-		n.fishCB(m.Water, m.Fish, m.Strength)
+		n.messageCB(n, m)
 	}
 }
 

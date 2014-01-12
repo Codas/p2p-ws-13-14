@@ -9,16 +9,16 @@ import (
 	"os"
 )
 
-type MessageCallbackFunc func(*Connection, *Message)
+type ConnectionMessageCallbackFunc func(*Connection, *Message)
 type ConnectionCloseCallbackFunc func(*Connection)
 
 type Connection struct {
 	c         net.Conn
-	messageCB MessageCallbackFunc
+	messageCB ConnectionMessageCallbackFunc
 	closeCB   ConnectionCloseCallbackFunc
 }
 
-func NewConnection(c net.Conn, messageCB MessageCallbackFunc, closeCB ConnectionCloseCallbackFunc) *Connection {
+func NewConnection(c net.Conn, messageCB ConnectionMessageCallbackFunc, closeCB ConnectionCloseCallbackFunc) *Connection {
 	conn := &Connection{
 		c:         c,
 		messageCB: messageCB,
@@ -29,7 +29,7 @@ func NewConnection(c net.Conn, messageCB MessageCallbackFunc, closeCB Connection
 	return conn
 }
 
-func ConnectTo(addr *Address, messageCB MessageCallbackFunc, closeCB ConnectionCloseCallbackFunc) (*Connection, error) {
+func ConnectTo(addr *Address, messageCB ConnectionMessageCallbackFunc, closeCB ConnectionCloseCallbackFunc) (*Connection, error) {
 	c, err := net.Dial("tcp", addr.String())
 	if err != nil {
 		return nil, err
@@ -70,7 +70,7 @@ func (c *Connection) SendMessage(msg *Message) error {
 	return writeN(c.c, buf)
 }
 
-func (c *Connection) SetCallbacks(messageCB MessageCallbackFunc, closeCB ConnectionCloseCallbackFunc) {
+func (c *Connection) SetCallbacks(messageCB ConnectionMessageCallbackFunc, closeCB ConnectionCloseCallbackFunc) {
 	c.messageCB = messageCB
 	c.closeCB = closeCB
 }
