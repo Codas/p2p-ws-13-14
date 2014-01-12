@@ -79,19 +79,19 @@ func (m *Message) String() string {
 
 	switch m.Action {
 	case ActionSplitEdge, ActionMergeEdge, ActionRedirect:
-		me += fmt.Sprintf("(%s, %d)", m.Addr.String(), int(m.Loc))
+		me += fmt.Sprintf("(%s, %d)", m.Addr, int(m.Loc))
 	case ActionHelloCW, ActionHelloCCW:
-		me += fmt.Sprintf("(%s, src=%d, dst=%d)", m.Addr.String(), int(m.SrcLoc), int(m.DstLoc))
+		me += fmt.Sprintf("(%s, src=%d, dst=%d)", m.Addr, int(m.SrcLoc), int(m.DstLoc))
 	case ActionBroadcast:
-		me += fmt.Sprintf("(%s, %d, %s)", m.Addr.String(), int(m.Loc), string(m.Content))
+		me += fmt.Sprintf("(%s, %d, %s)", m.Addr, int(m.Loc), string(m.Content))
 	case ActionGraph:
-		me += fmt.Sprintf("(%s, %d, len=%d)", m.Addr.String(), int(m.Loc), len(m.Content))
+		me += fmt.Sprintf("(%s, %d, len=%d)", m.Addr, int(m.Loc), len(m.Content))
 	case ActionFish:
 		me += fmt.Sprintf("(str=%d, fish=%d, water=%d)", m.Strength, m.Fish, m.Water)
 	case ActionJoin:
-		me += fmt.Sprintf("(%s)", m.Addr.String())
+		me += fmt.Sprintf("(%s)", m.Addr)
 	case ActionRandomWalk:
-		me += fmt.Sprintf("(%s, len=%d)", m.Addr.String(), len(m.Content))
+		me += fmt.Sprintf("(%s, len=%d)", m.Addr, len(m.Content))
 	}
 	return me
 }

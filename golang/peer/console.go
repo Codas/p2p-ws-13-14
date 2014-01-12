@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -70,8 +69,8 @@ func printHelp() {
 	fmt.Println("- q (QUIT)")
 	fmt.Println("- l (list all nodes)")
 	fmt.Println("- cycle (create a node that points to itself)")
-	fmt.Println("- c <ip> <port> (connect new node to <ip> <port>)")
-	fmt.Println("- cm <num> <ip> <port> (connect many (num))")
+	fmt.Println("- c <ip:port> (connect new node to <ip:port>)")
+	fmt.Println("- cm <num> <ip:port> (connect <num> nodes to <ip:port>)")
 	fmt.Println("- d [<#location>] (disconnect node on <#location>)")
 	fmt.Println("- da (disconnect all)")
 	fmt.Println("- b <text> (broadcast <text>)")
@@ -80,31 +79,25 @@ func printHelp() {
 }
 
 func connectNewNode(p *Peer, text string) {
-	addr := ParseAddress(strings.Split(text, " "))
-	if addr == nil {
+	var ip string
+	var port int
+	if _, err := fmt.Sscanf(text, "%s:%d", &ip, &port); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: parameter needs to have form <ip:port> (%s)\n", err)
 		return
 	}
-	p.AddNode(addr)
+
+	p.AddNode(NewAddress(ip, port))
 }
 
 func connectMany(p *Peer, text string) {
-	parts := strings.Split(text, " ")
-	if len(parts) != 3 {
-		fmt.Fprintln(os.Stderr, "Error: parameter needs to have form '<num> <ip> <port>'")
+	var num, port int
+	var ip string
+	if _, err := fmt.Sscanf(text, "%d %s:%d", &num, &ip, &port); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: parameter needs to have form '<num> <ip:port>' (%s)\n", err)
 		return
 	}
 
-	num, err := strconv.Atoi(parts[0])
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error parsing: <num> (%s) is not a number\n", parts[0])
-		return
-	}
-
-	addr := ParseAddress(parts[1:])
-	if addr == nil {
-		return
-	}
-
+	addr := NewAddress(ip, port)
 	for i := 0; i < num; i++ {
 		p.AddNode(addr)
 	}
@@ -113,16 +106,10 @@ func connectMany(p *Peer, text string) {
 func disconnectNode(p *Peer, text string) {
 	loc := Location(255)
 	if text != "" {
-		idx, err := strconv.Atoi(text)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error parsing: <#location> (%s) is not a number!\n", err)
+		if _, err := fmt.Sscan(text, &loc); err != nil {
+			fmt.Fprintf(os.Stderr, "Error parsing <#location>: (%s)!\n", err)
 			return
 		}
-		if idx < 0 || idx >= 254 {
-			fmt.Fprintf(os.Stderr, "Invalid <#location>!\n")
-			return
-		}
-		loc = Location(idx)
 	}
 
 	if !p.DisconnectNode(loc) {
@@ -134,7 +121,7 @@ func disconnectNode(p *Peer, text string) {
 // graph ticker
 var ticker *time.Ticker
 
-func togglePeriodicGraphFile(p *Peer, sInterval string) {
+func togglePeriodicGraphFile(p *Peer, text string) {
 	// Stop ticker, if its already running
 	if ticker != nil {
 		ticker.Stop()
@@ -145,11 +132,9 @@ func togglePeriodicGraphFile(p *Peer, sInterval string) {
 
 	// find out interval
 	interval := 1000
-	if sInterval != "" {
-		var err error
-		interval, err = strconv.Atoi(sInterval)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Parse Error: %s\n", err)
+	if text != "" {
+		if _, err := fmt.Sscan(text, &interval); err != nil {
+			fmt.Fprintf(os.Stderr, "Error parsing <interval>: (%s)!\n", err)
 			return
 		}
 	}
@@ -171,7 +156,7 @@ type jsonEntry struct {
 func writeJSONGraph(g []*NodeAttr) {
 	var jG []jsonEntry
 	for _, n := range g {
-		jG = append(jG, jsonEntry{strconv.Itoa(n.Addr.Port()) + ":" + strconv.Itoa(int(n.Loc))})
+		jG = append(jG, jsonEntry{fmt.Sprintf("%d:%d", n.Addr.Port, n.Loc)})
 	}
 
 	data, err := json.Marshal(&jG)
@@ -201,7 +186,7 @@ func graphCallback(g []*NodeAttr) {
 	}
 	fmt.Println("Graph:")
 	for _, n := range g {
-		fmt.Print(" -> (", n.Addr.Port(), ":", n.Loc, ")")
+		fmt.Printf(" -> (%d:%d)", n.Addr.Port, n.Loc)
 	}
 	fmt.Print("\n")
 }

@@ -33,6 +33,7 @@ func NewPeer(port int, graph GraphCallbackFunc) *Peer {
 	fmt.Printf("[Global] Started listening on %v\n", l.Addr())
 
 	p := &Peer{
+		l:       l,
 		addr:    NewAddress("127.0.0.1", port),
 		m:       new(sync.RWMutex),
 		done:    make(chan bool),

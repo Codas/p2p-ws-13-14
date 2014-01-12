@@ -92,17 +92,16 @@ func parseAddress(br byteReader) (addr *Address, err error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Address{
-		ip:   fmt.Sprintf("%d.%d.%d.%d", buf[0], buf[1], buf[2], buf[3]),
-		port: int(buf[4])<<8 + int(buf[5]),
-	}, nil
+	ip := fmt.Sprintf("%d.%d.%d.%d", buf[0], buf[1], buf[2], buf[3])
+	port := int(buf[4])<<8 + int(buf[5])
+	return NewAddress(ip, port), nil
 }
 
 func unparseAddress(addr *Address) []byte {
 	buf := make([]byte, 6)
-	parts := strings.Split(addr.ip, ".")
+	parts := strings.Split(addr.IP, ".")
 	if len(parts) != 4 {
-		fmt.Println("Error unparsing Address IP: not conforming IPv4:", addr.ip)
+		fmt.Println("Error unparsing Address IP: not conforming IPv4:", addr.IP)
 		return buf
 	}
 	for i, p := range parts {
@@ -113,8 +112,8 @@ func unparseAddress(addr *Address) []byte {
 		}
 		buf[i] = byte(n)
 	}
-	buf[4] = byte((addr.port >> 8) & 0xFF)
-	buf[5] = byte(addr.port & 0xFF)
+	buf[4] = byte((addr.Port >> 8) & 0xFF)
+	buf[5] = byte(addr.Port & 0xFF)
 	return buf
 }
 
