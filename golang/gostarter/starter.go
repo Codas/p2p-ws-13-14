@@ -9,7 +9,6 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -37,21 +36,14 @@ type Client struct {
 }
 
 func (c *Client) sendCommand(cmd string) {
+	fmt.Printf("#%d >> %s\n", c.port, cmd)
 	c.in.WriteString(cmd)
 	c.in.WriteString("\n")
 	c.in.Flush()
-	fmt.Printf("#%d >> %s\n", c.port, cmd)
 }
 
 func main() {
 	flag.Parse()
-
-	fmt.Println("COMMANDS")
-	fmt.Println("- q (QUIT)")
-	fmt.Println("- l (list client ports)")
-	fmt.Println("- n <#clients> (start <number of clients>)")
-	fmt.Println("- s <#clients> (shutdown <number of clients>)")
-	fmt.Println("- c <#port> <cmd> (send <cmd> to client with <#port>)")
 
 	startupClients(*clients, *locations)
 	consoleLoop()
@@ -79,37 +71,49 @@ func consoleLoop() {
 			args = text[idx+1:]
 		}
 		switch command {
+		case "h":
+			printHelp()
 		case "q":
 			return
 		case "l":
 			listClients()
-		case "s":
-			if i, err := strconv.Atoi(args); err == nil {
-				shutdownClients(i)
-			} else {
-				fmt.Fprintln(os.Stderr, "Parsing error:", err)
-			}
 		case "n":
-			if i, err := strconv.Atoi(args); err == nil {
-				startupClients(i, *locations)
-			} else {
-				fmt.Fprintln(os.Stderr, "Parsing error:", err)
+			var num int
+			if _, err := fmt.Sscan(args, &num); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: parameter needs to have form '<num>' (%s)\n", err)
+				return
 			}
+			startupClients(num, *locations)
+		case "s":
+			var num int
+			if _, err := fmt.Sscan(args, &num); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: parameter needs to have form '<num>' (%s)\n", err)
+				return
+			}
+			shutdownClients(num)
 		case "c":
-			idx = strings.Index(args, " ")
-			if idx == -1 {
-				fmt.Fprintln(os.Stderr, "Malformed command")
+			var port int
+			var peercmd string
+			if _, err := fmt.Sscanf(args, "%d %s", &port, &peercmd); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: parameter needs to have form '<port> <command>' (%s)\n", err)
+				return
 			}
-			if i, err := strconv.Atoi(args[:idx]); err == nil {
-				sendCommandtoClient(i, args[idx+1:])
-			} else {
-				fmt.Fprintln(os.Stderr, "Parsing error:", err)
-			}
+			sendCommandtoClient(port, peercmd)
 		}
 	}
 	if err := scanner.Err(); err != nil {
 		fmt.Fprintln(os.Stderr, "Error reading stdio:", err)
 	}
+}
+
+func printHelp() {
+	fmt.Println("HELP")
+	fmt.Println("- h (print this help)")
+	fmt.Println("- q (QUIT)")
+	fmt.Println("- l (list peer ports)")
+	fmt.Println("- n <num> (start <num> new peers>)")
+	fmt.Println("- s <num> (shutdown <num> peers)")
+	fmt.Println("- c <port> <cmd> (send <cmd> to peer with <port>)")
 }
 
 func startupClients(clients, locations int) {
@@ -136,7 +140,7 @@ func startupClient(port int) (c *Client, err error) {
 	}
 
 	fmt.Printf("#%d Starting [%s -p %d] ..\n", port, *executable, port)
-	c.cmd = exec.Command(*executable, "-p", strconv.Itoa(port))
+	c.cmd = exec.Command(*executable, "-p", fmt.Sprint(port))
 	setSysProcAttr(c.cmd)
 
 	outPipe, err := c.cmd.StdoutPipe()
@@ -177,7 +181,7 @@ func startupClient(port int) (c *Client, err error) {
 	if len(pool) > 0 {
 		for i := 0; i < *locations; i++ {
 			p := pool[rand.Intn(len(pool))]
-			c.sendCommand("c 127.0.0.1 " + strconv.Itoa(p.port))
+			c.sendCommand(fmt.Sprintf("c :%d", p.port))
 		}
 	}
 	m.RUnlock()
