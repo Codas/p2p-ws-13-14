@@ -38,9 +38,9 @@ type Message struct {
 	SrcLoc Location
 	DstLoc Location
 
-	Strength int32
-	Fish     float32
 	Water    float32
+	Fish     float32
+	Strength int32
 
 	Hops    Hops
 	Content []byte
@@ -87,7 +87,7 @@ func (m *Message) String() string {
 	case ActionGraph:
 		me += fmt.Sprintf("(%s, %d, len=%d)", m.Addr, int(m.Loc), len(m.Content))
 	case ActionFish:
-		me += fmt.Sprintf("(str=%d, fish=%d, water=%d)", m.Strength, m.Fish, m.Water)
+		me += fmt.Sprintf("(water=%.2f, fish=%.2f, str=%d)", m.Water, m.Fish, m.Strength)
 	case ActionJoin:
 		me += fmt.Sprintf("(%s)", m.Addr)
 	case ActionRandomWalk:

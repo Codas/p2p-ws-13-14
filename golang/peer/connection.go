@@ -62,7 +62,7 @@ func (c *Connection) SendMessage(msg *Message) error {
 		buf = append(buf, unparseLocation(msg.Loc)...)
 		buf = append(buf, unparseContent(msg.Content)...)
 	case ActionFish:
-		buf = append(buf, unparseFishAndWater(msg.Fish, msg.Water)...)
+		buf = append(buf, unparseWaterFishStrength(msg.Water, msg.Fish, msg.Strength)...)
 	case ActionJoin:
 		buf = append(buf, unparseAddress(msg.Addr)...)
 	case ActionRandomWalk:
@@ -169,14 +169,15 @@ func readMessages(c *Connection) {
 				Content: content,
 			})
 		case ActionFish:
-			fish, water, err := parseFishAndWater(br)
+			water, fish, strength, err := parseWaterFishStrength(br)
 			if err != nil {
-				fmt.Fprintln(os.Stderr, "Error on parsing fish and water", err)
+				fmt.Fprintln(os.Stderr, "Error on parsing water/fish/strength", err)
 			}
 			c.messageCB(c, &Message{
-				Action: action,
-				Fish:   fish,
-				Water:  water,
+				Action:   action,
+				Water:    water,
+				Fish:     fish,
+				Strength: strength,
 			})
 		case ActionRandomWalk:
 			addr, err := parseAddress(br)

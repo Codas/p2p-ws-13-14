@@ -1,16 +1,14 @@
 package main
 
 import (
+	"bytes"
+	"encoding/binary"
 	"errors"
-	"io"
-	"math"
-	"strconv"
-	"strings"
 )
 
 type byteReader interface {
-	io.Reader
-	io.ByteReader
+	Read([]byte) (int, error)
+	ReadByte() (byte, error)
 }
 
 func numBytes(length uint64) int {
@@ -121,6 +119,30 @@ func unparseLocation(l Location) []byte {
 	return buf
 }
 
+func parseWaterFishStrength(br byteReader) (water float32, fish float32, strength int32, err error) {
+	err = binary.Read(br, binary.LittleEndian, &water)
+	if err != nil {
+		return
+	}
+	err = binary.Read(br, binary.LittleEndian, &fish)
+	if err != nil {
+		return
+	}
+	err = binary.Read(br, binary.LittleEndian, &strength)
+	if err != nil {
+		return
+	}
+	return
+}
+
+func unparseWaterFishStrength(water float32, fish float32, strength int32) []byte {
+	buf := bytes.NewBuffer(make([]byte, 12))
+	binary.Write(buf, binary.LittleEndian, water)
+	binary.Write(buf, binary.LittleEndian, fish)
+	binary.Write(buf, binary.LittleEndian, strength)
+	return buf.Bytes()
+}
+
 func parseHops(br byteReader) (h Hops, err error) {
 	b, err := br.ReadByte()
 	if err != nil {
@@ -148,56 +170,12 @@ func unparseContent(content []byte) []byte {
 	return buf
 }
 
-func readN(r io.Reader, length int) (b []byte, err error) {
+func readN(br byteReader, length int) (b []byte, err error) {
 	buf := make([]byte, length)
-	if n, err := r.Read(buf); err != nil {
+	if n, err := br.Read(buf); err != nil {
 		return nil, err
 	} else if n != length {
 		return nil, errors.New("Read length missmatch!")
 	}
 	return buf, nil
-}
-
-func parseFishAndWater(br byteReader) (fish float32, water float32, err error) {
-	buf, err := readN(br, 16)
-
-	if err != nil {
-		return
-	}
-
-	fishMantisse := readBytesAsInt(buf[0:4])
-	fishExp := readBytesAsInt(buf[4:8]) - 32768
-	waterMantisse := readBytesAsInt(buf[8:12])
-	waterExp := readBytesAsInt(buf[12:16]) - 32768
-
-	fish = float32(float64(fishMantisse) * math.Pow(float64(2), float64(fishExp)))
-	water = float32(float64(waterMantisse) * math.Pow(float64(2), float64(waterExp)))
-	return
-}
-
-func readBytesAsInt(buf []byte) int32 {
-	return int32(buf[0])<<24 + int32(buf[1])<<16 + int32(buf[2])<<8 + int32(buf[3])
-}
-
-func unparseFishAndWater(fish float32, water float32) []byte {
-	buf := make([]byte, 16)
-	writeDoubleToByteBuffer(buf[0:8], fish)
-	writeDoubleToByteBuffer(buf[8:16], water)
-
-	return buf
-}
-
-func writeDoubleToByteBuffer(buf []byte, f float32) {
-	tmp := strings.Split(strconv.FormatFloat(float64(f), 'b', -1, 32), "p")
-	mantisse, _ := strconv.ParseInt(tmp[0], 10, 32)
-	binaryExp, _ := strconv.ParseInt(tmp[1], 10, 32)
-	writeIntToByteBuffer(buf[0:4], mantisse)
-	writeIntToByteBuffer(buf[4:8], binaryExp+32768) // with bias
-}
-
-func writeIntToByteBuffer(buf []byte, n int64) {
-	buf[0] = byte((n >> 24) & 0xFF)
-	buf[1] = byte((n >> 16) & 0xFF)
-	buf[2] = byte((n >> 8) & 0xFF)
-	buf[3] = byte(n & 0xFF)
 }
