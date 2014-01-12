@@ -17,6 +17,7 @@ import (
 var (
 	port       = flag.Int("p", 9000, "first port of a range, where clients listen on")
 	executable = flag.String("x", "../peer/peer.exe", "Executable file that starts a peer")
+	verbosity  = flag.Int("v", 2, "verbosity level [0=none, 1=only peer, 2=also nodes]")
 	delay      = flag.Int("d", 0, "Delay in ms between starting of peers")
 )
 
@@ -75,18 +76,22 @@ func consoleLoop() {
 			return
 		case "l":
 			listClients()
+		case "v":
+			var level int
+			if _, err := fmt.Sscan(args, &level); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: parameter needs to have form '<level>' (%s)\n", err)
+			}
+			setVerbosityLevel(level)
 		case "n":
 			var num, nodes int
 			if _, err := fmt.Sscan(args, &num, &nodes); err != nil {
 				fmt.Fprintf(os.Stderr, "Error: parameter needs to have form '<num> <nodes>' (%s)\n", err)
-				return
 			}
 			startupClients(num, nodes)
 		case "s":
 			var num int
 			if _, err := fmt.Sscan(args, &num); err != nil {
 				fmt.Fprintf(os.Stderr, "Error: parameter needs to have form '<num>' (%s)\n", err)
-				return
 			}
 			shutdownClients(num)
 		case "c":
@@ -94,7 +99,6 @@ func consoleLoop() {
 			var peercmd string
 			if _, err := fmt.Sscanf(args, "%d %s", &port, &peercmd); err != nil {
 				fmt.Fprintf(os.Stderr, "Error: parameter needs to have form '<port> <command>' (%s)\n", err)
-				return
 			}
 			sendCommandtoClient(port, peercmd)
 		}
@@ -109,6 +113,7 @@ func printHelp() {
 	fmt.Println("- h (print this help)")
 	fmt.Println("- q (QUIT)")
 	fmt.Println("- l (list peer ports)")
+	fmt.Println("- v <level> (set verbosity level [2 = all, 1 = only peer])")
 	fmt.Println("- n <num> <nodes> (start <num> new peers with <nodes> nodes each)")
 	fmt.Println("- s <num> (shutdown <num> peers)")
 	fmt.Println("- c <port> <cmd> (send <cmd> to peer with <port>)")
@@ -178,6 +183,7 @@ func startupClient(port int, locations int) (c *Client, err error) {
 			c.sendCommand(fmt.Sprintf("c :%d", p.port))
 		}
 	}
+	c.sendCommand(fmt.Sprintf("v %d", *verbosity))
 	m.RUnlock()
 
 	return c, nil
@@ -264,4 +270,15 @@ func listClients() {
 		fmt.Print(c.port, " ")
 	}
 	fmt.Println()
+}
+
+func setVerbosityLevel(level int) {
+	m.RLock()
+	defer m.RUnlock()
+	*verbosity = level
+
+	// set verbosity level on all clients
+	for _, c := range pool {
+		c.sendCommand(fmt.Sprintf("v %d", *verbosity))
+	}
 }

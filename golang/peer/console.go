@@ -38,6 +38,8 @@ func consoleLoop(p *Peer) {
 			printHelp()
 		case "q":
 			return
+		case "v":
+			setVerbosityLevel(p, args)
 		case "l":
 			p.ListNodes()
 		case "cycle":
@@ -67,6 +69,7 @@ func printHelp() {
 	fmt.Println("HELP")
 	fmt.Println("- h (print this help)")
 	fmt.Println("- q (QUIT)")
+	fmt.Println("- v <level> (set verbosity level [2 = all, 1 = only peer])")
 	fmt.Println("- l (list all nodes)")
 	fmt.Println("- cycle (create a node that points to itself)")
 	fmt.Println("- c <ip:port> (connect new node to <ip:port>)")
@@ -76,6 +79,15 @@ func printHelp() {
 	fmt.Println("- b <text> (broadcast <text>)")
 	fmt.Println("- g (generate graph)")
 	fmt.Println("- gf [<intervall>] (periodically generate graph to file (in ms))")
+}
+
+func setVerbosityLevel(p *Peer, text string) {
+	var level int
+	if _, err := fmt.Sscan(text, &level); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: parameter needs to have form '<level>' (%s)\n", err)
+		return
+	}
+	p.SetVerbosityLevel(level)
 }
 
 func connectNewNode(p *Peer, text string) {

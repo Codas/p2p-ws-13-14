@@ -73,23 +73,27 @@ type Node struct {
 	OtherNode *remoteNode
 	NextNode  *remoteNode
 	PrevNode  *remoteNode
+	m         *sync.Mutex
 
 	cleanCB CleanCallbackFunc
 	graphCB GraphCallbackFunc
 	fishCB  FishCallbackFunc
 
-	m *sync.Mutex
+	v bool // verbose
 }
 
 func NewNode(lAddr *Address, rAddr *Address, loc Location, clean CleanCallbackFunc, graph GraphCallbackFunc, fish FishCallbackFunc) *Node {
 	n := &Node{
-		State:   StateDone,
-		Addr:    lAddr,
-		Loc:     loc,
+		State: StateDone,
+		Addr:  lAddr,
+		Loc:   loc,
+		m:     new(sync.Mutex),
+
 		cleanCB: clean,
 		graphCB: graph,
 		fishCB:  fish,
-		m:       new(sync.Mutex),
+
+		v: true,
 	}
 
 	return n.initiateSplitEdge(rAddr)
@@ -97,13 +101,16 @@ func NewNode(lAddr *Address, rAddr *Address, loc Location, clean CleanCallbackFu
 
 func NewCycleNode(lAddr *Address, loc Location, clean CleanCallbackFunc, graph GraphCallbackFunc, fish FishCallbackFunc) *Node {
 	n := &Node{
-		State:   StateSplitting,
-		Addr:    lAddr,
-		Loc:     loc,
+		State: StateSplitting,
+		Addr:  lAddr,
+		Loc:   loc,
+		m:     new(sync.Mutex),
+
 		cleanCB: clean,
 		graphCB: graph,
 		fishCB:  fish,
-		m:       new(sync.Mutex),
+
+		v: true,
 	}
 
 	c, err := ConnectTo(lAddr, n.MessageCallback, n.closeCallback)
@@ -112,7 +119,7 @@ func NewCycleNode(lAddr *Address, loc Location, clean CleanCallbackFunc, graph G
 		return nil
 	}
 
-	fmt.Printf("[Node#%d] NewCycleNode -> Connected to %s\n", n.Loc, c.Remote())
+	n.println(fmt.Sprintf("[Node#%d] NewCycleNode -> Connected to %s", n.Loc, c.Remote()))
 
 	n.m.Lock()
 	defer n.m.Unlock()
@@ -125,16 +132,16 @@ func NewCycleNode(lAddr *Address, loc Location, clean CleanCallbackFunc, graph G
 func (n *Node) initiateSplitEdge(rAddr *Address) *Node {
 	n.m.Lock()
 	defer n.m.Unlock()
-	fmt.Println("----------------------------------------")
-	fmt.Println(n)
-	fmt.Printf("[Node#%d] Initiating SplitEdge\n", n.Loc)
+	n.println("----------------------------------------")
+	n.println(n)
+	n.println(fmt.Sprintf("[Node#%d] Initiating SplitEdge", n.Loc))
 	c, err := ConnectTo(rAddr, n.MessageCallback, n.closeCallback)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Dial Error: %s\n", err)
 		return nil
 	}
 
-	fmt.Printf("[Node#%d] Connected to %s\n", n.Loc, c.Remote())
+	n.println(fmt.Sprintf("[Node#%d] Connected to %s", n.Loc, c.Remote()))
 	n.setState(StateSplitting)
 	n.setOther(c, rAddr, 255)
 	n.sendOther(NewSplitEdgeMessage(n.Addr, n.Loc))
@@ -145,9 +152,9 @@ func (n *Node) initiateSplitEdge(rAddr *Address) *Node {
 func (n *Node) InitiateGraph() {
 	n.m.Lock()
 	defer n.m.Unlock()
-	fmt.Println("----------------------------------------")
-	fmt.Println(n)
-	fmt.Printf("[Node#%d] Initiating Graph\n", n.Loc)
+	n.println("----------------------------------------")
+	n.println(n)
+	n.println(fmt.Sprintf("[Node#%d] Initiating Graph", n.Loc))
 	content := unparseAddress(n.Addr)
 	content = append(content, unparseLocation(n.Loc)...)
 	n.sendNext(NewGraphMessage(n.Addr, n.Loc, content))
@@ -156,38 +163,38 @@ func (n *Node) InitiateGraph() {
 func (n *Node) InitiateBroadcast(text string) {
 	n.m.Lock()
 	defer n.m.Unlock()
-	fmt.Println("----------------------------------------")
-	fmt.Println(n)
-	fmt.Printf("[Node#%d] Initiating Broadcast\n", n.Loc)
+	n.println("----------------------------------------")
+	n.println(n)
+	n.println(fmt.Sprintf("[Node#%d] Initiating Broadcast", n.Loc))
 	n.sendNext(NewBroadcastMessage(n.Addr, n.Loc, []byte(text)))
 }
 
 func (n *Node) InitiateMergeEdge() {
 	n.m.Lock()
 	defer n.m.Unlock()
-	fmt.Println("----------------------------------------")
-	fmt.Println(n)
-	fmt.Printf("[Node#%d] Initiating MergeEdge\n", n.Loc)
-	if n.NextNode == nil {
-		fmt.Printf("[Node#%d] !!!!!!!!!!!!!!!!!!!! NEXTNODE IS NIL !!!!!!!!!!!!!\n", n.Loc)
-		return
-	}
+	n.println("----------------------------------------")
+	n.println(n)
+	n.println(fmt.Sprintf("[Node#%d] Initiating MergeEdge", n.Loc))
 	n.sendPrev(NewMergeEdgeMessage(n.NextNode.addr, n.NextNode.loc))
 	n.setState(StateMerging)
 }
 
+func (n *Node) SetVerbosity(verbose bool) {
+	n.v = verbose
+}
+
 func (n *Node) sendPrev(m *Message) {
-	fmt.Printf("[Node#%d] -> PREV: %s\n", n.Loc, m)
+	n.println(fmt.Sprintf("[Node#%d] -> PREV: %s", n.Loc, m))
 	n.PrevNode.c.SendMessage(m)
 }
 
 func (n *Node) sendNext(m *Message) {
-	fmt.Printf("[Node#%d] -> NEXT: %s\n", n.Loc, m)
+	n.println(fmt.Sprintf("[Node#%d] -> NEXT: %s", n.Loc, m))
 	n.NextNode.c.SendMessage(m)
 }
 
 func (n *Node) sendOther(m *Message) {
-	fmt.Printf("[Node#%d] -> OTHER: %s\n", n.Loc, m)
+	n.println(fmt.Sprintf("[Node#%d] -> OTHER: %s", n.Loc, m))
 	n.OtherNode.c.SendMessage(m)
 }
 
@@ -203,8 +210,8 @@ func (n *Node) setPrev(c *Connection, addr *Address, loc Location) {
 	} else {
 		n.PrevNode = nil
 	}
-	//fmt.Printf("[Node#%d] PrevNode: %s -> %s\n", n.Loc, oldNode, n.PrevNode)
-	fmt.Println(n)
+	//n.println(fmt.Sprintf("[Node#%d] PrevNode: %s -> %s", n.Loc, oldNode, n.PrevNode))
+	n.println(n)
 }
 
 func (n *Node) setNext(c *Connection, addr *Address, loc Location) {
@@ -219,8 +226,8 @@ func (n *Node) setNext(c *Connection, addr *Address, loc Location) {
 	} else {
 		n.NextNode = nil
 	}
-	//fmt.Printf("[Node#%d] NextNode: %s -> %s\n", n.Loc, oldNode, n.NextNode)
-	fmt.Println(n)
+	//n.println(fmt.Sprintf("[Node#%d] NextNode: %s -> %s", n.Loc, oldNode, n.NextNode))
+	n.println(n)
 }
 
 func (n *Node) setOther(c *Connection, addr *Address, loc Location) {
@@ -235,19 +242,19 @@ func (n *Node) setOther(c *Connection, addr *Address, loc Location) {
 	} else {
 		n.OtherNode = nil
 	}
-	//fmt.Printf("[Node#%d] OtherNode: %s -> %s\n", n.Loc, oldNode, n.OtherNode)
-	fmt.Println(n)
+	//n.println(fmt.Sprintf("[Node#%d] OtherNode: %s -> %s", n.Loc, oldNode, n.OtherNode))
+	n.println(n)
 }
 
 func (n *Node) setState(s NodeState) {
 	n.State = s
-	fmt.Println(n)
+	n.println(n)
 }
 
 func (n *Node) closeCallback(c *Connection) {
 	n.m.Lock()
 	defer n.m.Unlock()
-	fmt.Printf("[Node#%d]%s connection closed\n", n.Loc, n.identifyConnection(c))
+	n.println(fmt.Sprintf("[Node#%d]%s connection closed", n.Loc, n.identifyConnection(c)))
 	if n.PrevNode.isConn(c) {
 		n.setPrev(nil, nil, 0)
 	}
@@ -268,9 +275,9 @@ func (n *Node) closeCallback(c *Connection) {
 func (n *Node) MessageCallback(c *Connection, m *Message) {
 	n.m.Lock()
 	defer n.m.Unlock()
-	fmt.Println("----------------------------------------")
-	fmt.Println(n)
-	fmt.Printf("[Node#%d] <-%s: %s\n", n.Loc, n.identifyConnection(c), m)
+	n.println("----------------------------------------")
+	n.println(n)
+	n.println(fmt.Sprintf("[Node#%d] <-%s: %s", n.Loc, n.identifyConnection(c), m))
 
 	switch m.Action {
 	case ActionSplitEdge:
@@ -280,7 +287,7 @@ func (n *Node) MessageCallback(c *Connection, m *Message) {
 			n.sendOther(NewHelloCCWMessage(n.Addr, n.Loc, m.Loc))
 			n.sendNext(NewRedirectMessage(m.Addr, m.Loc))
 		} else {
-			fmt.Printf("[Node#%d] Could not handle msg\n", n.Loc)
+			n.println(fmt.Sprintf("[Node#%d] Could not handle msg", n.Loc))
 		}
 	case ActionMergeEdge:
 		if n.NextNode.isConn(c) {
@@ -328,7 +335,7 @@ func (n *Node) MessageCallback(c *Connection, m *Message) {
 			n.setNext(c, m.Addr, m.SrcLoc)
 			n.setState(StateFree)
 		} else {
-			fmt.Printf("[Node#%d] Could not handle msg\n", n.Loc)
+			n.println(fmt.Sprintf("[Node#%d] Could not handle msg", n.Loc))
 		}
 	case ActionHelloCCW:
 		if n.OtherNode.isConn(c) {
@@ -349,12 +356,12 @@ func (n *Node) MessageCallback(c *Connection, m *Message) {
 			time.Sleep(RETRY_DELAY/2 + time.Duration(rand.Intn(int(RETRY_DELAY/2))))
 			n.InitiateMergeEdge()
 		}()
-		fmt.Printf("[Node#%d] Retrying later...\n", n.Loc)
+		n.println(fmt.Sprintf("[Node#%d] Retrying later...", n.Loc))
 	case ActionCancel:
 		if n.State == StateSplitting && n.NextNode.isConn(c) {
 			n.OtherNode.c.Close()
 		} else {
-			fmt.Printf("[Node#%d] Could not handle msg\n", n.Loc)
+			n.println(fmt.Sprintf("[Node#%d] Could not handle msg", n.Loc))
 		}
 	case ActionShutdown:
 		if n.State == StateSplitting && n.NextNode.isConn(c) {
@@ -367,11 +374,11 @@ func (n *Node) MessageCallback(c *Connection, m *Message) {
 			n.setState(StateDone)
 			n.cleanCB(n)
 		} else {
-			fmt.Printf("[Node#%d] Could not handle msg\n", n.Loc)
+			n.println(fmt.Sprintf("[Node#%d] Could not handle msg", n.Loc))
 		}
 	case ActionBroadcast:
 		if *m.Addr == *n.Addr && m.Loc == n.Loc {
-			fmt.Printf("[Node#%d] We sent this broadcast, don't forward\n", n.Loc)
+			// we sent this broadcast, don't forward
 		} else if n.NextNode.isConn(c) {
 			n.sendPrev(m)
 		} else if n.PrevNode.isConn(c) {
@@ -379,25 +386,21 @@ func (n *Node) MessageCallback(c *Connection, m *Message) {
 		}
 	case ActionGraph:
 		if *m.Addr == *n.Addr && m.Loc == n.Loc {
-			fmt.Printf("[Node#%d] We sent this broadcast, don't forward\n", n.Loc)
-			if len(m.Content)%7 != 0 {
-				fmt.Printf("[Node#%d] Size of Graph mod 7 should be 0 (len=%d)\n", n.Loc, len(m.Content))
-			} else {
-				var graph []*NodeAttr
-				b := bytes.NewReader(m.Content)
-				for {
-					addr, err := parseAddress(b)
-					if err != nil {
-						break
-					}
-					loc, err := parseLocation(b)
-					if err != nil {
-						break
-					}
-					graph = append(graph, &NodeAttr{addr, loc})
+			// we sent this graph request, it's complete
+			var graph []*NodeAttr
+			b := bytes.NewReader(m.Content)
+			for {
+				addr, err := parseAddress(b)
+				if err != nil {
+					break
 				}
-				n.graphCB(graph)
+				loc, err := parseLocation(b)
+				if err != nil {
+					break
+				}
+				graph = append(graph, &NodeAttr{addr, loc})
 			}
+			n.graphCB(graph)
 		} else {
 			content := m.Content
 			content = append(content, unparseAddress(n.Addr)...)
@@ -428,6 +431,12 @@ func (n *Node) identifyConnection(c *Connection) string {
 		from = " NEW(" + c.c.RemoteAddr().String() + ")"
 	}
 	return from
+}
+
+func (n *Node) println(a ...interface{}) {
+	if n.v {
+		fmt.Println(a...)
+	}
 }
 
 func (n *Node) String() string {

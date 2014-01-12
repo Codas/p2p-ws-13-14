@@ -30,6 +30,8 @@ type Peer struct {
 
 	shutdown bool
 	done     chan bool
+
+	v bool // verbose
 }
 
 func NewPeer(port int, graph GraphCallbackFunc) *Peer {
@@ -38,8 +40,6 @@ func NewPeer(port int, graph GraphCallbackFunc) *Peer {
 		fmt.Fprintf(os.Stderr, "Listening Error: %s\n", err)
 		return nil
 	}
-	fmt.Printf("[Global] Started listening on %v\n", l.Addr())
-
 	p := &Peer{
 		l:    l,
 		addr: NewAddress(LocalIP, port),
@@ -52,7 +52,10 @@ func NewPeer(port int, graph GraphCallbackFunc) *Peer {
 
 		done:    make(chan bool),
 		graphCB: graph,
+
+		v: true,
 	}
+	fmt.Printf("[Global] Started listening on %v\n", l.Addr())
 
 	go p.acceptLoop()
 	go p.fishLoop()
@@ -154,6 +157,16 @@ func (p *Peer) Shutdown() {
 	<-p.done
 }
 
+func (p *Peer) SetVerbosityLevel(level int) {
+	p.m.RLock()
+	defer p.m.RUnlock()
+
+	p.v = level > 0
+	for _, n := range p.nodes {
+		n.SetVerbosity(level > 1)
+	}
+}
+
 func (p *Peer) fishLoop() {
 	// TODO: perhaps adjust timer -> race to equilibrium?
 	p.fishticker = time.NewTicker(FISH_INTERVAL)
@@ -216,7 +229,7 @@ func (p *Peer) fishCB(water, fish float32, strength uint32) {
 	}
 	// apply HYSTERESIS to new estimated networksize
 	p.networksize = p.networksize*(1-HYSTERESIS) + p.water/p.fish*HYSTERESIS
-	fmt.Printf("[Global] New estimated Networksize: %.2f\n", p.networksize)
+	p.println(fmt.Sprintf("[Global] [FISH] new n=%.2f [w=%.3f/f=%.3f]", p.networksize, p.water, p.fish))
 }
 
 func (p *Peer) acceptLoop() {
@@ -226,7 +239,7 @@ func (p *Peer) acceptLoop() {
 			fmt.Fprintf(os.Stderr, "Accept Error: %s\n", err)
 			return
 		}
-		fmt.Printf("[Global] New Connection from %v\n", c.RemoteAddr())
+		p.println(fmt.Sprintf("[Global] New Connection from %v", c.RemoteAddr()))
 
 		NewConnection(c, p.handleIncomingConnection, nil)
 	}
@@ -255,23 +268,23 @@ func (p *Peer) handleIncomingConnection(c *Connection, msg *Message) {
 		}
 
 		if len(freenodes) == 0 {
-			fmt.Printf("[Global] from %v, No Free Node: Closing Conn: %s\n", c.Remote(), msg)
+			p.println(fmt.Sprintf("[Global] from %v, No Free Node: Closing Conn: %s", c.Remote(), msg))
 			c.Close()
 			return
 		}
 
 		n = freenodes[r.Intn(len(freenodes))]
 	default:
-		fmt.Printf("[Global] invalid from %v: %s\n", c.Remote(), msg)
+		fmt.Fprintf(os.Stderr, "[Global] invalid from %v: %s\n", c.Remote(), msg)
 		return
 	}
 
 	if n == nil {
-		fmt.Printf("[Global] from %v -> Loc#%d not found: %s\n", c.Remote(), msg.DstLoc, msg)
+		fmt.Fprintf(os.Stderr, "[Global] from %v -> Loc#%d not found: %s\n", c.Remote(), msg.DstLoc, msg)
 		return
 	}
 
-	fmt.Printf("[Global] from %v -> Loc#%d: %s\n", c.Remote(), n.Loc, msg)
+	p.println(fmt.Sprintf("[Global] from %v -> Loc#%d: %s", c.Remote(), n.Loc, msg))
 
 	n.MessageCallback(c, msg)
 }
@@ -312,5 +325,11 @@ func (p *Peer) removeNode(n *Node) {
 
 	if p.shutdown && len(p.nodes) == 0 {
 		p.done <- true
+	}
+}
+
+func (p *Peer) println(a ...interface{}) {
+	if p.v {
+		fmt.Println(a...)
 	}
 }
