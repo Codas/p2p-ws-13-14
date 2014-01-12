@@ -136,7 +136,8 @@ func parseWaterFishStrength(br byteReader) (water float32, fish float32, strengt
 }
 
 func unparseWaterFishStrength(water float32, fish float32, strength uint32) []byte {
-	buf := bytes.NewBuffer(make([]byte, 12))
+	//buf := bytes.NewBuffer(make([]byte, 12))
+	buf := new(bytes.Buffer)
 	binary.Write(buf, binary.LittleEndian, water)
 	binary.Write(buf, binary.LittleEndian, fish)
 	binary.Write(buf, binary.LittleEndian, strength)

@@ -24,9 +24,7 @@ func NewConnection(c net.Conn, messageCB MessageCallbackFunc, closeCB Connection
 		messageCB: messageCB,
 		closeCB:   closeCB,
 	}
-	if messageCB != nil {
-		go readMessages(conn)
-	}
+	go readMessages(conn)
 
 	return conn
 }
@@ -74,12 +72,6 @@ func (c *Connection) SendMessage(msg *Message) error {
 }
 
 func (c *Connection) SetCallbacks(messageCB MessageCallbackFunc, closeCB ConnectionCloseCallbackFunc) {
-	if c.messageCB == nil {
-		c.messageCB = messageCB
-		c.closeCB = closeCB
-		go readMessages(c)
-		return
-	}
 	c.messageCB = messageCB
 	c.closeCB = closeCB
 }

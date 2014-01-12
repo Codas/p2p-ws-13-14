@@ -55,6 +55,7 @@ func NewPeer(port int, graph GraphCallbackFunc) *Peer {
 	}
 
 	go p.acceptLoop()
+	go p.fishLoop()
 
 	return p
 }
@@ -153,12 +154,12 @@ func (p *Peer) Shutdown() {
 	<-p.done
 }
 
-// TODO: perhaps adjust timer
 func (p *Peer) fishLoop() {
+	// TODO: perhaps adjust timer -> race to equilibrium?
 	p.fishticker = time.NewTicker(FISH_INTERVAL)
 	for _ = range p.fishticker.C {
 		p.m.RLock()
-		// calculate degree (number of real neighbors)
+		// calculate degree (collect all real neighbour addresses)
 		var addresses []*Address
 		for _, n := range p.nodes {
 			addresses = p.addUniqueAddress(addresses, n.PrevNode.addr)
@@ -177,7 +178,7 @@ func (p *Peer) fishLoop() {
 				if n.PrevNode.addr == address {
 					n.sendPrev(NewFishMessage(waterpart, fishpart, p.strength))
 					break
-				} else if n.PrevNode.addr == address {
+				} else if n.NextNode.addr == address {
 					n.sendNext(NewFishMessage(waterpart, fishpart, p.strength))
 					break
 				}
@@ -188,11 +189,11 @@ func (p *Peer) fishLoop() {
 }
 
 func (p *Peer) addUniqueAddress(addresses []*Address, address *Address) []*Address {
-	if address == p.addr {
+	if *address == *p.addr {
 		return addresses
 	}
 	for _, a := range addresses {
-		if a == address {
+		if *a == *address {
 			return addresses
 		}
 	}
