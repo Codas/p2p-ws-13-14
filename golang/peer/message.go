@@ -15,7 +15,6 @@ const (
 	ActionBroadcast
 	ActionGraph
 	ActionFish
-	ActionJoin
 	ActionRandomWalk
 )
 
@@ -71,8 +70,6 @@ func (m *Message) String() string {
 		me = "Graph"
 	case ActionFish:
 		me = "Fish"
-	case ActionJoin:
-		me = "Join"
 	case ActionRandomWalk:
 		me = "RandomWalk"
 	}
@@ -88,8 +85,6 @@ func (m *Message) String() string {
 		me += fmt.Sprintf("(%s, %d, len=%d)", m.Addr, int(m.Loc), len(m.Content))
 	case ActionFish:
 		me += fmt.Sprintf("(water=%.2f, fish=%.2f, str=%d)", m.Water, m.Fish, m.Strength)
-	case ActionJoin:
-		me += fmt.Sprintf("(%s)", m.Addr)
 	case ActionRandomWalk:
 		me += fmt.Sprintf("(%s, len=%d)", m.Addr, len(m.Content))
 	}
@@ -183,17 +178,11 @@ func NewFishMessage(water float32, fish float32, strength uint32) *Message {
 	}
 }
 
-func NewJoinMessage(addr *Address) *Message {
-	return &Message{
-		Action: ActionJoin,
-		Addr:   addr,
-	}
-}
-
-func NewRandomWalkMessage(addr *Address, hops Hops) *Message {
+func NewRandomWalkMessage(addr *Address, loc Location, hops Hops) *Message {
 	return &Message{
 		Action: ActionRandomWalk,
 		Addr:   addr,
+		Loc:    loc,
 		Hops:   hops,
 	}
 }
