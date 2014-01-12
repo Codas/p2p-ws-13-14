@@ -9,6 +9,12 @@ import (
 	"time"
 )
 
+const RETRY_DELAY = 1 * time.Second
+
+type CleanCallbackFunc func(*Node)
+type GraphCallbackFunc func([]*NodeAttr)
+type FishCallbackFunc func(float32, float32, uint32)
+
 const (
 	// node states
 	StateFree = iota
@@ -17,12 +23,7 @@ const (
 	StateDone
 )
 
-const RETRY_DELAY = 1 * time.Second
-
 type NodeState int
-
-type CleanCallbackFunc func(*Node)
-type GraphCallbackFunc func(g []*NodeAttr)
 
 func (n NodeState) String() string {
 	switch n {
@@ -39,9 +40,9 @@ func (n NodeState) String() string {
 }
 
 type remoteNode struct {
-	loc  Location
-	addr *Address
 	c    *Connection
+	addr *Address
+	loc  Location
 }
 
 func (rn *remoteNode) String() string {
@@ -75,30 +76,33 @@ type Node struct {
 
 	cleanCB CleanCallbackFunc
 	graphCB GraphCallbackFunc
+	fishCB  FishCallbackFunc
 
 	m *sync.Mutex
 }
 
-func NewNode(lAddr *Address, rAddr *Address, loc Location, clean CleanCallbackFunc, graph GraphCallbackFunc) *Node {
+func NewNode(lAddr *Address, rAddr *Address, loc Location, clean CleanCallbackFunc, graph GraphCallbackFunc, fish FishCallbackFunc) *Node {
 	n := &Node{
 		State:   StateDone,
 		Addr:    lAddr,
 		Loc:     loc,
 		cleanCB: clean,
 		graphCB: graph,
+		fishCB:  fish,
 		m:       new(sync.Mutex),
 	}
 
 	return n.initiateSplitEdge(rAddr)
 }
 
-func NewCycleNode(lAddr *Address, loc Location, clean CleanCallbackFunc, graph GraphCallbackFunc) *Node {
+func NewCycleNode(lAddr *Address, loc Location, clean CleanCallbackFunc, graph GraphCallbackFunc, fish FishCallbackFunc) *Node {
 	n := &Node{
 		State:   StateSplitting,
 		Addr:    lAddr,
 		Loc:     loc,
 		cleanCB: clean,
 		graphCB: graph,
+		fishCB:  fish,
 		m:       new(sync.Mutex),
 	}
 
@@ -404,6 +408,8 @@ func (n *Node) MessageCallback(c *Connection, m *Message) {
 				n.sendNext(NewGraphMessage(m.Addr, m.Loc, content))
 			}
 		}
+	case ActionFish:
+		n.fishCB(m.Water, m.Fish, m.Strength)
 	}
 }
 

@@ -40,7 +40,7 @@ type Message struct {
 
 	Water    float32
 	Fish     float32
-	Strength int32
+	Strength uint32
 
 	Hops    Hops
 	Content []byte
@@ -174,11 +174,12 @@ func NewGraphMessage(addr *Address, loc Location, content []byte) *Message {
 	}
 }
 
-func NewFishMessage(fish float32, water float32) *Message {
+func NewFishMessage(water float32, fish float32, strength uint32) *Message {
 	return &Message{
-		Action: ActionFish,
-		Fish:   fish,
-		Water:  water,
+		Action:   ActionFish,
+		Water:    water,
+		Fish:     fish,
+		Strength: strength,
 	}
 }
 
