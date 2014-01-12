@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"math"
 	"math/rand"
 	"net"
 	"os"
@@ -202,6 +203,37 @@ func (p *Peer) messageCB(n *Node, m *Message) {
 		// apply HYSTERESIS to new estimated networksize
 		p.networksize = p.networksize*(1-HYSTERESIS) + p.water/p.fish*HYSTERESIS
 		p.println(fmt.Sprintf("[Global] [FISH] new n=%.2f [w=%.3f/f=%.3f]", p.networksize, p.water, p.fish))
+	case ActionRandomWalk:
+		m.Hops -= 1
+
+		// looking for a node that is free
+		var freenodes []*Node
+		for _, n := range p.nodes {
+			if n.State == StateFree {
+				freenodes = append(freenodes, n)
+			}
+		}
+
+		if len(freenodes) == 0 {
+			p.println(fmt.Sprintf("[Global] No Free Node: %s", m))
+			return
+		}
+
+		node := freenodes[r.Intn(len(freenodes))]
+		if r.Intn(2) == 0 {
+			if node == n {
+				node.sendPrev(m)
+			} else {
+				node.SendPrev(m)
+			}
+		} else {
+			if node == n {
+				node.sendNext(m)
+			} else {
+				node.SendNext(m)
+			}
+		}
+
 	}
 }
 
@@ -282,6 +314,16 @@ func (p *Peer) handleIncomingConnection(c *Connection, msg *Message) {
 			}
 		}
 	case ActionSplitEdge:
+		c.Close()
+		// create with extra hop
+		hops := Hops(3*math.Log(float64(p.networksize))) + 1
+		if hops > 1 {
+			rwm := NewRandomWalkMessage(msg.Addr, msg.Loc, hops)
+			// handle as if it came from some random node
+			p.messageCB(nil, rwm)
+			return
+		}
+
 		// looking for a node that is free
 		var freenodes []*Node
 		for _, n := range p.nodes {
