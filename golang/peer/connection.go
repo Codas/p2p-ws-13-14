@@ -32,7 +32,7 @@ func NewConnection(c net.Conn, messageCB MessageCallbackFunc, closeCB Connection
 }
 
 func ConnectTo(addr *Address, messageCB MessageCallbackFunc, closeCB ConnectionCloseCallbackFunc) (*Connection, error) {
-	c, err := net.Dial("tcp", fmt.Sprintf("%s:%d", addr.IP, addr.Port))
+	c, err := net.Dial("tcp", addr.String())
 	if err != nil {
 		return nil, err
 	}

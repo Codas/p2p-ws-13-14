@@ -34,7 +34,7 @@ func NewPeer(port int, graph GraphCallbackFunc) *Peer {
 
 	p := &Peer{
 		l:       l,
-		addr:    NewAddress("127.0.0.1", port),
+		addr:    NewAddress(LocalIP, port),
 		m:       new(sync.RWMutex),
 		done:    make(chan bool),
 		graphCB: graph,

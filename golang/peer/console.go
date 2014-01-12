@@ -79,10 +79,15 @@ func printHelp() {
 }
 
 func connectNewNode(p *Peer, text string) {
-	var ip string
+	var ipstring string
 	var port int
-	if _, err := fmt.Sscanf(text, "%s:%d", &ip, &port); err != nil {
+	if _, err := fmt.Sscanf(text, "%s:%d", &ipstring, &port); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: parameter needs to have form <ip:port> (%s)\n", err)
+		return
+	}
+	ip, err := ParseIP(ipstring)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing ip: needs to have form '' / 'localhost' / 'x.x.x.x' (%s)\n", err)
 		return
 	}
 
@@ -91,9 +96,14 @@ func connectNewNode(p *Peer, text string) {
 
 func connectMany(p *Peer, text string) {
 	var num, port int
-	var ip string
-	if _, err := fmt.Sscanf(text, "%d %s:%d", &num, &ip, &port); err != nil {
+	var ipstring string
+	if _, err := fmt.Sscanf(text, "%d %s:%d", &num, &ipstring, &port); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: parameter needs to have form '<num> <ip:port>' (%s)\n", err)
+		return
+	}
+	ip, err := ParseIP(ipstring)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing ip: needs to have form '' / 'localhost' / 'x.x.x.x' (%s)\n", err)
 		return
 	}
 
