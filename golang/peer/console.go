@@ -182,9 +182,42 @@ func writeJSONGraph(g []*NodeAttr) {
 	}
 }
 
+func writeDOTGraphs(g []*NodeAttr) {
+	// chained graph
+	fG, err := os.Create("graph.dot")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating file: %s\n", err)
+		return
+	}
+	defer fG.Close()
+
+	// multigraph
+	fM, err := os.Create("graphMG.dot")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating file: %s\n", err)
+		return
+	}
+	defer fM.Close()
+
+	fG.WriteString("digraph p2p {\n")
+	fM.WriteString("digraph p2p {\n")
+	for _, n := range g {
+		fG.WriteString(fmt.Sprintf("%d_%d", n.Addr.Port, n.Loc))
+		fM.WriteString(fmt.Sprintf("%d", n.Addr.Port))
+
+		fG.WriteString(" -> ")
+		fM.WriteString(" -> ")
+	}
+	fG.WriteString(fmt.Sprintf("%d_%d", g[0].Addr.Port, g[0].Loc))
+	fM.WriteString(fmt.Sprintf("%d", g[0].Addr.Port))
+	fG.WriteString(";\n}")
+	fM.WriteString(";\n}")
+}
+
 func graphCallback(g []*NodeAttr) {
 	if ticker != nil {
 		writeJSONGraph(g)
+		writeDOTGraphs(g)
 		return
 	}
 	fmt.Println("Graph:")
