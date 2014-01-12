@@ -34,10 +34,10 @@ type Peer struct {
 	shutdown bool
 	done     chan bool
 
-	v bool // verbose
+	verbosity int
 }
 
-func NewPeer(port int, graph GraphCallbackFunc) *Peer {
+func NewPeer(port, verbosity int, graph GraphCallbackFunc) *Peer {
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Listening Error: %s\n", err)
@@ -56,9 +56,9 @@ func NewPeer(port int, graph GraphCallbackFunc) *Peer {
 		done:    make(chan bool),
 		graphCB: graph,
 
-		v: true,
+		verbosity: verbosity,
 	}
-	fmt.Printf("[Global] Started listening on %v\n", l.Addr())
+	p.println(fmt.Sprintf("[Global] Started listening on %v", l.Addr()))
 
 	go p.acceptLoop()
 	go p.fishLoop()
@@ -70,9 +70,9 @@ func NewPeer(port int, graph GraphCallbackFunc) *Peer {
 func (p *Peer) AddNode(addr *Address) {
 	var n *Node
 	if addr == nil {
-		n = NewCycleNode(p.addr, p.uniqueLocation(), p.removeNode, p.messageCB)
+		n = NewCycleNode(p.addr, p.uniqueLocation(), p.verbosity > 1, p.removeNode, p.messageCB)
 	} else {
-		n = NewNode(p.addr, addr, p.uniqueLocation(), p.removeNode, p.messageCB)
+		n = NewNode(p.addr, addr, p.uniqueLocation(), p.verbosity > 1, p.removeNode, p.messageCB)
 	}
 	if n == nil {
 		return
@@ -164,7 +164,7 @@ func (p *Peer) SetVerbosityLevel(level int) {
 	p.m.RLock()
 	defer p.m.RUnlock()
 
-	p.v = level > 0
+	p.verbosity = level
 	for _, n := range p.nodes {
 		n.SetVerbosity(level > 1)
 	}
@@ -352,7 +352,7 @@ func (p *Peer) removeNode(n *Node) {
 }
 
 func (p *Peer) println(a ...interface{}) {
-	if p.v {
+	if p.verbosity > 0 {
 		fmt.Println(a...)
 	}
 }

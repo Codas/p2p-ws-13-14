@@ -76,10 +76,10 @@ type Node struct {
 	cleanCB   CleanCallbackFunc
 	messageCB NodeMessageCallbackFunc
 
-	v bool // verbose
+	verbose bool
 }
 
-func NewNode(lAddr *Address, rAddr *Address, loc Location, clean CleanCallbackFunc, message NodeMessageCallbackFunc) *Node {
+func NewNode(lAddr *Address, rAddr *Address, loc Location, verbose bool, clean CleanCallbackFunc, message NodeMessageCallbackFunc) *Node {
 	n := &Node{
 		State: StateDone,
 		Addr:  lAddr,
@@ -89,13 +89,13 @@ func NewNode(lAddr *Address, rAddr *Address, loc Location, clean CleanCallbackFu
 		cleanCB:   clean,
 		messageCB: message,
 
-		v: true,
+		verbose: verbose,
 	}
 
 	return n.initiateSplitEdge(rAddr)
 }
 
-func NewCycleNode(lAddr *Address, loc Location, clean CleanCallbackFunc, message NodeMessageCallbackFunc) *Node {
+func NewCycleNode(lAddr *Address, loc Location, verbose bool, clean CleanCallbackFunc, message NodeMessageCallbackFunc) *Node {
 	n := &Node{
 		State: StateSplitting,
 		Addr:  lAddr,
@@ -105,7 +105,7 @@ func NewCycleNode(lAddr *Address, loc Location, clean CleanCallbackFunc, message
 		cleanCB:   clean,
 		messageCB: message,
 
-		v: true,
+		verbose: verbose,
 	}
 
 	c, err := ConnectTo(lAddr, n.MessageCallback, n.closeCallback)
@@ -175,7 +175,7 @@ func (n *Node) InitiateMergeEdge() {
 }
 
 func (n *Node) SetVerbosity(verbose bool) {
-	n.v = verbose
+	n.verbose = verbose
 }
 
 func (n *Node) sendPrev(m *Message) {
@@ -417,7 +417,7 @@ func (n *Node) identifyConnection(c *Connection) string {
 }
 
 func (n *Node) println(a ...interface{}) {
-	if n.v {
+	if n.verbose {
 		fmt.Println(a...)
 	}
 }

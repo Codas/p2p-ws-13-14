@@ -142,8 +142,8 @@ func startupClient(port int, locations int) (c *Client, err error) {
 		port: port,
 	}
 
-	fmt.Printf("#%d Starting [%s -p %d] ..\n", port, *executable, port)
-	c.cmd = exec.Command(*executable, "-p", fmt.Sprint(port))
+	fmt.Printf("#%d Starting [%s -p %d -v %d] ..\n", port, *executable, port, *verbosity)
+	c.cmd = exec.Command(*executable, "-p", fmt.Sprint(port), "-v", *verbosity)
 	setSysProcAttr(c.cmd)
 
 	outPipe, err := c.cmd.StdoutPipe()
@@ -183,7 +183,6 @@ func startupClient(port int, locations int) (c *Client, err error) {
 			c.sendCommand(fmt.Sprintf("c :%d", p.port))
 		}
 	}
-	c.sendCommand(fmt.Sprintf("v %d", *verbosity))
 	m.RUnlock()
 
 	return c, nil

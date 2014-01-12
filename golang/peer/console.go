@@ -10,12 +10,15 @@ import (
 	"time"
 )
 
-var port = flag.Int("p", 1337, "Port at which to listen")
+var (
+	port      = flag.Int("p", 1337, "Port at which to listen")
+	verbosity = flag.Int("v", 2, "verbosity level [0=none, 1=only peer, 2=also nodes]")
+)
 
 func main() {
 	flag.Parse()
 
-	p := NewPeer(*port, graphCallback)
+	p := NewPeer(*port, *verbosity, graphCallback)
 
 	consoleLoop(p)
 
@@ -87,7 +90,8 @@ func setVerbosityLevel(p *Peer, text string) {
 		fmt.Fprintf(os.Stderr, "Error: parameter needs to have form '<level>' (%s)\n", err)
 		return
 	}
-	p.SetVerbosityLevel(level)
+	*verbosity = level
+	p.SetVerbosityLevel(*verbosity)
 }
 
 func connectNewNode(p *Peer, text string) {
