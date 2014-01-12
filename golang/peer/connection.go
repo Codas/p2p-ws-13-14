@@ -9,23 +9,34 @@ import (
 	"os"
 )
 
+type MessageCallbackFunc func(*Connection, *Message)
+type ConnectionCloseCallbackFunc func(*Connection)
+
 type Connection struct {
 	c         net.Conn
-	mCallback func(*Connection, *Message)
-	cCallback func(*Connection)
+	messageCB MessageCallbackFunc
+	closeCB   ConnectionCloseCallbackFunc
 }
 
-func NewConnection(c net.Conn, msg func(*Connection, *Message), close func(*Connection)) *Connection {
+func NewConnection(c net.Conn, messageCB MessageCallbackFunc, closeCB ConnectionCloseCallbackFunc) *Connection {
 	conn := &Connection{
 		c:         c,
-		mCallback: msg,
-		cCallback: close,
+		messageCB: messageCB,
+		closeCB:   closeCB,
 	}
-	if msg != nil {
+	if messageCB != nil {
 		go readMessages(conn)
 	}
 
 	return conn
+}
+
+func ConnectTo(addr *Address, messageCB MessageCallbackFunc, closeCB ConnectionCloseCallbackFunc) (*Connection, error) {
+	c, err := net.Dial("tcp", fmt.Sprintf("%s:%d", addr.ip, addr.port))
+	if err != nil {
+		return nil, err
+	}
+	return NewConnection(c, messageCB, closeCB), nil
 }
 
 func (c *Connection) Close() error {
@@ -50,27 +61,27 @@ func (c *Connection) SendMessage(msg *Message) error {
 		buf = append(buf, unparseAddress(msg.Addr)...)
 		buf = append(buf, unparseLocation(msg.Loc)...)
 		buf = append(buf, unparseContent(msg.Content)...)
-	case ActionFishMessage:
-		buf = append(buf, unparseFishAndWater(0, 0)...) //TODO: fish and water
+	case ActionFish:
+		buf = append(buf, unparseFishAndWater(msg.Fish, msg.Water)...)
 	case ActionJoin:
 		buf = append(buf, unparseAddress(msg.Addr)...)
 	case ActionRandomWalk:
 		buf = append(buf, unparseAddress(msg.Addr)...)
-		buf = append(buf, unparseHops(1)...) // TODO: Calculate hops
+		buf = append(buf, unparseHops(msg.Hops)...)
 	}
 
 	return writeN(c.c, buf)
 }
 
-func (c *Connection) SetCallbacks(msg func(*Connection, *Message), close func(*Connection)) {
-	if c.mCallback == nil {
-		c.mCallback = msg
-		c.cCallback = close
+func (c *Connection) SetCallbacks(messageCB MessageCallbackFunc, closeCB ConnectionCloseCallbackFunc) {
+	if c.messageCB == nil {
+		c.messageCB = messageCB
+		c.closeCB = closeCB
 		go readMessages(c)
 		return
 	}
-	c.mCallback = msg
-	c.cCallback = close
+	c.messageCB = messageCB
+	c.closeCB = closeCB
 }
 
 func writeN(w io.Writer, buf []byte) error {
@@ -86,18 +97,10 @@ func readMessages(c *Connection) {
 	br := bufio.NewReader(c.c)
 	for {
 		action, err := parseHeader(br)
-		if err == io.EOF {
-			if c.cCallback != nil {
-				c.cCallback(c)
+		if err != nil {
+			if c.closeCB != nil {
+				c.closeCB(c)
 			}
-			return
-		} else if err != nil {
-			if c.cCallback != nil {
-				c.cCallback(c)
-			} else {
-				fmt.Fprintln(os.Stderr, "CRAZY: close handler is nil")
-			}
-			//fmt.Fprintln(os.Stderr, "Error reading from socket1: ", err)
 			return
 		}
 		switch action {
@@ -112,7 +115,7 @@ func readMessages(c *Connection) {
 				fmt.Fprintln(os.Stderr, "Error reading from socket3: ", err)
 				return
 			}
-			c.mCallback(c, &Message{
+			c.messageCB(c, &Message{
 				Action: action,
 				Addr:   addr,
 				Loc:    loc,
@@ -133,14 +136,14 @@ func readMessages(c *Connection) {
 				fmt.Fprintln(os.Stderr, "Error reading from socket6: ", err)
 				return
 			}
-			c.mCallback(c, &Message{
+			c.messageCB(c, &Message{
 				Action: action,
 				Addr:   addr,
 				SrcLoc: srcLoc,
 				DstLoc: dstLoc,
 			})
 		case ActionCancel, ActionTryLater, ActionShutdown, ActionJoin:
-			c.mCallback(c, &Message{
+			c.messageCB(c, &Message{
 				Action: action,
 			})
 		case ActionBroadcast, ActionGraph:
@@ -159,18 +162,18 @@ func readMessages(c *Connection) {
 				fmt.Fprintln(os.Stderr, "Error reading from socket7: ", err)
 				return
 			}
-			c.mCallback(c, &Message{
+			c.messageCB(c, &Message{
 				Action:  action,
 				Addr:    addr,
 				Loc:     loc,
 				Content: content,
 			})
-		case ActionFishMessage:
+		case ActionFish:
 			fish, water, err := parseFishAndWater(br)
 			if err != nil {
 				fmt.Fprintln(os.Stderr, "Error on parsing fish and water", err)
 			}
-			c.mCallback(c, &Message{
+			c.messageCB(c, &Message{
 				Action: action,
 				Fish:   fish,
 				Water:  water,
@@ -184,7 +187,7 @@ func readMessages(c *Connection) {
 			if err != nil {
 				fmt.Fprintln(os.Stderr, "Error on parsing hops of RandomWalk", err)
 			}
-			c.mCallback(c, &Message{
+			c.messageCB(c, &Message{
 				Action: action,
 				Addr:   addr,
 				Hops:   hops,

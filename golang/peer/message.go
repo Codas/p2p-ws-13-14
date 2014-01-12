@@ -1,6 +1,6 @@
 package main
 
-import "strconv"
+import "fmt"
 
 const (
 	// message actions
@@ -14,7 +14,7 @@ const (
 	ActionShutdown
 	ActionBroadcast
 	ActionGraph
-	ActionFishMessage
+	ActionFish
 	ActionJoin
 	ActionRandomWalk
 )
@@ -27,19 +27,21 @@ const (
 
 type Action int
 type Location uint8
-type FishCarry float32
-type WaterCarry float32
 type Hops uint8
 
 // Package type
 type Message struct {
-	Action  Action
-	Addr    *Address
-	Loc     Location
-	SrcLoc  Location
-	DstLoc  Location
-	Fish    FishCarry
-	Water   WaterCarry
+	Action Action
+
+	Addr   *Address
+	Loc    Location
+	SrcLoc Location
+	DstLoc Location
+
+	Strength int32
+	Fish     float32
+	Water    float32
+
 	Hops    Hops
 	Content []byte
 }
@@ -67,7 +69,7 @@ func (m *Message) String() string {
 		me = "Broadcast"
 	case ActionGraph:
 		me = "Graph"
-	case ActionFishMessage:
+	case ActionFish:
 		me = "Fish"
 	case ActionJoin:
 		me = "Join"
@@ -77,20 +79,19 @@ func (m *Message) String() string {
 
 	switch m.Action {
 	case ActionSplitEdge, ActionMergeEdge, ActionRedirect:
-		me += "(" + m.Addr.String() + ", " + strconv.Itoa(int(m.Loc)) + ")"
+		me += fmt.Sprintf("(%s, %d)", m.Addr.String(), int(m.Loc))
 	case ActionHelloCW, ActionHelloCCW:
-		me += "(" + m.Addr.String() + ", src=" + strconv.Itoa(int(m.SrcLoc)) + ", dst=" + strconv.Itoa(int(m.DstLoc)) + ")"
+		me += fmt.Sprintf("(%s, src=%d, dst=%d)", m.Addr.String(), int(m.SrcLoc), int(m.DstLoc))
 	case ActionBroadcast:
-		me += "(" + m.Addr.String() + ", " + strconv.Itoa(int(m.Loc)) + ", " + string(m.Content) + ")"
+		me += fmt.Sprintf("(%s, %d, %s)", m.Addr.String(), int(m.Loc), string(m.Content))
 	case ActionGraph:
-		me += "(" + m.Addr.String() + ", " + strconv.Itoa(int(m.Loc)) + ", len=" + strconv.Itoa(len(m.Content)) + ")"
-	case ActionFishMessage:
-		me += "(" + strconv.Itoa(len(m.Content)) + ", " + strconv.Itoa(int(m.Fish)) + ", " + strconv.Itoa(int(m.Water)) + ")"
-
+		me += fmt.Sprintf("(%s, %d, len=%d)", m.Addr.String(), int(m.Loc), len(m.Content))
+	case ActionFish:
+		me += fmt.Sprintf("(str=%d, fish=%d, water=%d)", m.Strength, m.Fish, m.Water)
 	case ActionJoin:
-		me += "(" + m.Addr.String() + ")"
+		me += fmt.Sprintf("(%s)", m.Addr.String())
 	case ActionRandomWalk:
-		me += "(" + m.Addr.String() + ", " + strconv.Itoa(len(m.Content)) + ")"
+		me += fmt.Sprintf("(%s, len=%d)", m.Addr.String(), len(m.Content))
 	}
 	return me
 }
@@ -173,9 +174,9 @@ func NewGraphMessage(addr *Address, loc Location, content []byte) *Message {
 	}
 }
 
-func NewFishMessage(addr *Address, fish FishCarry, water WaterCarry) *Message {
+func NewFishMessage(fish float32, water float32) *Message {
 	return &Message{
-		Action: ActionFishMessage,
+		Action: ActionFish,
 		Fish:   fish,
 		Water:  water,
 	}
@@ -184,12 +185,14 @@ func NewFishMessage(addr *Address, fish FishCarry, water WaterCarry) *Message {
 func NewJoinMessage(addr *Address) *Message {
 	return &Message{
 		Action: ActionJoin,
+		Addr:   addr,
 	}
 }
 
 func NewRandomWalkMessage(addr *Address, hops Hops) *Message {
 	return &Message{
 		Action: ActionRandomWalk,
+		Addr:   addr,
 		Hops:   hops,
 	}
 }

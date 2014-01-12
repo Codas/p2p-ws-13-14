@@ -4,9 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"math/rand"
-	"net"
 	"os"
-	"strconv"
 	"sync"
 	"time"
 )
@@ -52,7 +50,7 @@ func (rn *remoteNode) String() string {
 	} else if rn.loc == 255 {
 		return "??"
 	}
-	return strconv.Itoa(int(rn.loc))
+	return fmt.Sprintf("%d", rn.loc)
 }
 
 func (rn *remoteNode) isConn(c *Connection) bool {
@@ -95,12 +93,6 @@ func NewNode(lAddr *Address, rAddr *Address, loc Location, clean CleanCallbackFu
 }
 
 func NewCycleNode(lAddr *Address, loc Location, clean CleanCallbackFunc, graph GraphCallbackFunc) *Node {
-	c, err := connectTo(lAddr)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "NewCycleNode: Dial Error: %s\n", err)
-		return nil
-	}
-
 	n := &Node{
 		State:   StateSplitting,
 		Addr:    lAddr,
@@ -109,6 +101,13 @@ func NewCycleNode(lAddr *Address, loc Location, clean CleanCallbackFunc, graph G
 		graphCB: graph,
 		m:       new(sync.Mutex),
 	}
+
+	c, err := ConnectTo(lAddr, n.MessageCallback, n.closeCallback)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "NewCycleNode: Dial Error: %s\n", err)
+		return nil
+	}
+
 	fmt.Printf("[Node#%d] NewCycleNode -> Connected to %s\n", n.Loc, c.Remote())
 
 	n.m.Lock()
@@ -125,7 +124,7 @@ func (n *Node) initiateSplitEdge(rAddr *Address) *Node {
 	fmt.Println("----------------------------------------")
 	fmt.Println(n)
 	fmt.Printf("[Node#%d] Initiating SplitEdge\n", n.Loc)
-	c, err := connectTo(rAddr)
+	c, err := ConnectTo(rAddr, n.MessageCallback, n.closeCallback)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Dial Error: %s\n", err)
 		return nil
@@ -287,7 +286,7 @@ func (n *Node) MessageCallback(c *Connection, m *Message) {
 				n.setState(StateDone)
 				n.cleanCB(n)
 			} else if n.State == StateFree {
-				c, err := connectTo(m.Addr)
+				c, err := ConnectTo(m.Addr, n.MessageCallback, n.closeCallback)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "[Node#%d] !! Dial Error: %s\n", n.Loc, err)
 					n.sendNext(NewTryLaterMessage())
@@ -304,7 +303,7 @@ func (n *Node) MessageCallback(c *Connection, m *Message) {
 		}
 	case ActionRedirect:
 		if n.PrevNode.isConn(c) {
-			c, err := connectTo(m.Addr)
+			c, err := ConnectTo(m.Addr, n.MessageCallback, n.closeCallback)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "[Node#%d] !! Dial Error: %s\n", n.Loc, err)
 				n.sendPrev(NewCancelMessage())
@@ -423,14 +422,6 @@ func (n *Node) identifyConnection(c *Connection) string {
 		from = " NEW(" + c.c.RemoteAddr().String() + ")"
 	}
 	return from
-}
-
-func connectTo(addr *Address) (*Connection, error) {
-	c, err := net.Dial("tcp", addr.ip+":"+strconv.Itoa(addr.port))
-	if err != nil {
-		return nil, err
-	}
-	return NewConnection(c, nil, nil), nil
 }
 
 func (n *Node) String() string {

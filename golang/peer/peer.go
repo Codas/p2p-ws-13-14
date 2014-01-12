@@ -5,7 +5,6 @@ import (
 	"math/rand"
 	"net"
 	"os"
-	"strconv"
 	"sync"
 	"time"
 )
@@ -26,7 +25,7 @@ type Peer struct {
 }
 
 func NewPeer(port int, graph GraphCallbackFunc) *Peer {
-	l, err := net.Listen("tcp", ":"+strconv.Itoa(port))
+	l, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Listening Error: %s\n", err)
 		return nil

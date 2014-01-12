@@ -41,5 +41,5 @@ func ParseAddress(fields []string) *Address {
 }
 
 func (a *Address) String() string {
-	return a.ip + ":" + strconv.Itoa(a.port)
+	return fmt.Sprintf("%s:%d", a.ip, a.port)
 }

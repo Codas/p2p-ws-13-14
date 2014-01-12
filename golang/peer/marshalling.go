@@ -93,7 +93,7 @@ func parseAddress(br byteReader) (addr *Address, err error) {
 		return nil, err
 	}
 	return &Address{
-		ip:   strconv.Itoa(int(buf[0])) + "." + strconv.Itoa(int(buf[1])) + "." + strconv.Itoa(int(buf[2])) + "." + strconv.Itoa(int(buf[3])),
+		ip:   fmt.Sprintf("%d.%d.%d.%d", buf[0], buf[1], buf[2], buf[3]),
 		port: int(buf[4])<<8 + int(buf[5]),
 	}, nil
 }
@@ -107,7 +107,7 @@ func unparseAddress(addr *Address) []byte {
 	}
 	for i, p := range parts {
 		n, err := strconv.Atoi(p)
-		if len(parts) != 4 {
+		if err != nil {
 			fmt.Println("Parsing Error when unparsing Address IP: ", err)
 			return buf
 		}
@@ -169,7 +169,7 @@ func readN(r io.Reader, length int) (b []byte, err error) {
 	return buf, nil
 }
 
-func parseFishAndWater(br byteReader) (fish FishCarry, water WaterCarry, err error) {
+func parseFishAndWater(br byteReader) (fish float32, water float32, err error) {
 	buf, err := readN(br, 16)
 
 	if err != nil {
@@ -181,8 +181,8 @@ func parseFishAndWater(br byteReader) (fish FishCarry, water WaterCarry, err err
 	waterMantisse := readBytesAsInt(buf[8:12])
 	waterExp := readBytesAsInt(buf[12:16]) - 32768
 
-	fish = FishCarry(float32(float64(fishMantisse) * math.Pow(float64(2), float64(fishExp))))
-	water = WaterCarry(float32(float64(waterMantisse) * math.Pow(float64(2), float64(waterExp))))
+	fish = float32(float64(fishMantisse) * math.Pow(float64(2), float64(fishExp)))
+	water = float32(float64(waterMantisse) * math.Pow(float64(2), float64(waterExp)))
 	return
 }
 
