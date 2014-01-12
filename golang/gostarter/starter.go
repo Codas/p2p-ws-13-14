@@ -100,7 +100,7 @@ func consoleLoop() {
 			if _, err := fmt.Sscanf(args, "%d %s", &port, &peercmd); err != nil {
 				fmt.Fprintf(os.Stderr, "Error: parameter needs to have form '<port> <command>' (%s)\n", err)
 			}
-			sendCommandtoClient(port, peercmd)
+			sendCommandtoClient(port, args[strings.Index(args, " ")+1:])
 		}
 	}
 	if err := scanner.Err(); err != nil {
@@ -131,7 +131,7 @@ func startupClients(clients, locations int) {
 		pool = append(pool, c)
 		m.Unlock()
 		*port++
-		if i != clients-1 {
+		if *delay != 0 && i != clients-1 {
 			time.Sleep(time.Duration(*delay) * time.Millisecond)
 		}
 	}
