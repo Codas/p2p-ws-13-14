@@ -154,40 +154,38 @@ func parseStdIO() {
 
 	for scanner.Scan() {
 		text := scanner.Text()
+		command := text
+		args := ""
 		if idx := strings.Index(text, " "); idx != -1 {
-			command := text[:idx]
-			text = text[idx+1:]
-			switch command {
-			case "s":
-				if i, err := strconv.Atoi(text); err == nil {
-					shutdownClients(i)
-				} else {
-					fmt.Fprintln(os.Stderr, "Parsing error:", err)
-				}
-			case "n":
-				if i, err := strconv.Atoi(text); err == nil {
-					startupClients(i, *locations)
-				} else {
-					fmt.Fprintln(os.Stderr, "Parsing error:", err)
-				}
-			case "c":
-				idx = strings.Index(text, " ")
-				if idx == -1 {
-					fmt.Fprintln(os.Stderr, "Malformed command")
-				}
-				if i, err := strconv.Atoi(text[:idx]); err == nil {
-					sendCommandtoClient(i, text[idx+1:])
-				} else {
-					fmt.Fprintln(os.Stderr, "Parsing error:", err)
-				}
-
+			command = text[:idx]
+			args = text[idx+1:]
+		}
+		switch command {
+		case "q":
+			return
+		case "l":
+			listClients()
+		case "s":
+			if i, err := strconv.Atoi(args); err == nil {
+				shutdownClients(i)
+			} else {
+				fmt.Fprintln(os.Stderr, "Parsing error:", err)
 			}
-		} else {
-			switch text {
-			case "q":
-				return
-			case "l":
-				listClients()
+		case "n":
+			if i, err := strconv.Atoi(args); err == nil {
+				startupClients(i, *locations)
+			} else {
+				fmt.Fprintln(os.Stderr, "Parsing error:", err)
+			}
+		case "c":
+			idx = strings.Index(args, " ")
+			if idx == -1 {
+				fmt.Fprintln(os.Stderr, "Malformed command")
+			}
+			if i, err := strconv.Atoi(args[:idx]); err == nil {
+				sendCommandtoClient(i, args[idx+1:])
+			} else {
+				fmt.Fprintln(os.Stderr, "Parsing error:", err)
 			}
 		}
 	}
