@@ -62,7 +62,7 @@ func (rn *remoteNode) String() string {
 	} else if rn.loc == 255 {
 		return "??"
 	}
-	return fmt.Sprintf("%d", rn.loc)
+	return fmt.Sprintf("%d:%d", rn.addr.Port, rn.loc)
 }
 
 func (rn *remoteNode) isConn(c *Connection) bool {
