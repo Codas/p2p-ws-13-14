@@ -227,8 +227,8 @@ func writeDOTGraphs(g []*NodeAttr) {
 		fG.WriteString(" -> ")
 		fM.WriteString(" -> ")
 	}
-	fG.WriteString(fmt.Sprintf("%d_%d", g[0].Addr.Port, g[0].Loc))
-	fM.WriteString(fmt.Sprintf("%d", g[0].Addr.Port))
+	fG.WriteString(fmt.Sprintf("N%d_%d", g[0].Addr.Port, g[0].Loc))
+	fM.WriteString(fmt.Sprintf("N%d", g[0].Addr.Port))
 	fG.WriteString(";\n}")
 	fM.WriteString(";\n}")
 }
