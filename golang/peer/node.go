@@ -414,7 +414,7 @@ func (n *Node) MessageCallback(c *Connection, m *Message) {
 		// accept always?
 		if n.State == StateDone {
 			n.setNext(c, m.Addr, m.SrcLoc)
-			n.State = StateSplitting
+			n.setState(StateSplitting)
 			n.InitState = 2
 		} else if n.State == StateSplitting && n.InitState == 1 {
 			n.setNext(c, m.Addr, m.SrcLoc)
@@ -427,10 +427,10 @@ func (n *Node) MessageCallback(c *Connection, m *Message) {
 		}
 	case ActionHelloCCW:
 		if n.State == StateSplitting && n.InitState == 2 {
-			n.State = StateFree
+			n.setState(tateFree)
 			n.InitState = 0
 		} else if n.State == StateDone {
-			n.State = StateSplitting
+			n.setState(StateSplitting)
 			n.InitState = 1
 		}
 		if n.OtherNode.isConn(c) {
