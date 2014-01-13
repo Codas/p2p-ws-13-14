@@ -2,13 +2,13 @@ package main
 
 import (
 	"fmt"
-	"math/rand"
 	"os"
 	"sync"
 	"time"
 )
 
-const RETRY_DELAY = 1 * time.Second
+const RETRY_DELAY = 2 * time.Second
+const RETRY_VARIANCE = 200 * time.Millisecond
 
 type CleanCallbackFunc func(*Node)
 type NodeMessageCallbackFunc func(*Node, *Message)
@@ -17,11 +17,22 @@ const (
 	// node states
 	StateFree = iota
 	StateSplitting
+	//StateSplittingPrev
 	StateMerging
 	StateDone
 )
 
 type NodeState int
+
+// Node State signal correct forwarding of a message in any direction
+func (n NodeState) Ready() bool {
+	return n == StateFree
+	switch n {
+	case StateSplitting, StateDone:
+		return false
+	}
+	return true
+}
 
 func (n NodeState) String() string {
 	switch n {
@@ -29,6 +40,8 @@ func (n NodeState) String() string {
 		return "StateFree"
 	case StateSplitting:
 		return "StateSplitting"
+	//case StateSplittingPrev:
+	//	return "StateSplittingPrev"
 	case StateMerging:
 		return "StateMerging"
 	case StateDone:
@@ -113,7 +126,6 @@ func NewCycleNode(lAddr *Address, loc Location, verbose bool, clean CleanCallbac
 		fmt.Fprintf(os.Stderr, "NewCycleNode: Dial Error: %s\n", err)
 		return nil
 	}
-
 	n.println(fmt.Sprintf("[Node#%d] NewCycleNode -> Connected to %s", n.Loc, c.Remote()))
 
 	n.m.Lock()
@@ -132,17 +144,24 @@ func (n *Node) initiateSplitEdge(rAddr *Address) *Node {
 	}
 	n.println("----------------------------------------")
 	n.println(n)
-	n.println(fmt.Sprintf("[Node#%d] Initiating SplitEdge", n.Loc))
+	n.println(fmt.Sprintf("[Node#%d] Initiating SplitEdge: %s", n.Loc, rAddr))
 	c, err := ConnectTo(rAddr, n.MessageCallback, n.closeCallback)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Dial Error: %s\n", err)
 		return nil
 	}
+	m := NewSplitEdgeMessage(n.Addr, n.Loc)
+	c.SendMessage(m)
+	n.println(fmt.Sprintf("[Node#%d] -> sending %s", n.Loc, m))
+	//n.setState(StateSplitter)
+	//n.setOther(c, rAddr, 255)
+	//n.sendOther(NewSplitEdgeMessage(n.Addr, n.Loc))
 
-	n.println(fmt.Sprintf("[Node#%d] Connected to %s", n.Loc, c.Remote()))
-	n.setState(StateSplitting)
-	n.setOther(c, rAddr, 255)
-	n.sendOther(NewSplitEdgeMessage(n.Addr, n.Loc))
+	// reschedule splitedge if it didnt work
+	go func(addr *Address) {
+		time.Sleep(RETRY_DELAY + time.Duration(r.Int63n(int64(RETRY_VARIANCE))))
+		n.initiateSplitEdge(addr)
+	}(rAddr)
 
 	return n
 }
@@ -170,6 +189,17 @@ func (n *Node) InitiateBroadcast(text string) {
 func (n *Node) InitiateMergeEdge() {
 	n.m.Lock()
 	defer n.m.Unlock()
+	if n.State == StateDone {
+		// TODO: perhaps cleanup and return?
+		return
+	} else if n.State != StateFree {
+		n.println(fmt.Sprintf("[Node#%d] Retrying MergeEdge later (state is %s)", n.Loc, n.State))
+		go func() {
+			time.Sleep(RETRY_DELAY + time.Duration(r.Int63n(int64(RETRY_VARIANCE))))
+			n.InitiateMergeEdge()
+		}()
+		return
+	}
 	n.println("----------------------------------------")
 	n.println(n)
 	n.println(fmt.Sprintf("[Node#%d] Initiating MergeEdge", n.Loc))
@@ -193,18 +223,39 @@ func (n *Node) SendNext(m *Message) {
 	n.sendNext(m)
 }
 
+func (n *Node) sendSpecial(to string, c *Connection, m *Message) {
+	n.println(fmt.Sprintf("[Node#%d] -> %s: %s", n.Loc, to, m))
+	if c == nil {
+		fmt.Fprintf(os.Stderr, "[Node#%d] ERROR -> %s (is nil): %s\n", n.Loc, to, m)
+		return
+	}
+	c.SendMessage(m)
+}
+
 func (n *Node) sendPrev(m *Message) {
 	n.println(fmt.Sprintf("[Node#%d] -> PREV: %s", n.Loc, m))
+	if n.PrevNode == nil || n.PrevNode.c == nil {
+		fmt.Fprintf(os.Stderr, "[Node#%d] ERROR -> PREV (is nil): %s\n", n.Loc, m)
+		return
+	}
 	n.PrevNode.c.SendMessage(m)
 }
 
 func (n *Node) sendNext(m *Message) {
 	n.println(fmt.Sprintf("[Node#%d] -> NEXT: %s", n.Loc, m))
+	if n.NextNode == nil || n.NextNode.c == nil {
+		fmt.Fprintf(os.Stderr, "[Node#%d] ERROR -> PREV (is nil): %s\n", n.Loc, m)
+		return
+	}
 	n.NextNode.c.SendMessage(m)
 }
 
 func (n *Node) sendOther(m *Message) {
 	n.println(fmt.Sprintf("[Node#%d] -> OTHER: %s", n.Loc, m))
+	if n.OtherNode == nil || n.OtherNode.c == nil {
+		fmt.Fprintf(os.Stderr, "[Node#%d] ERROR -> PREV (is nil): %s\n", n.Loc, m)
+		return
+	}
 	n.OtherNode.c.SendMessage(m)
 }
 
@@ -264,40 +315,36 @@ func (n *Node) setState(s NodeState) {
 func (n *Node) closeCallback(c *Connection) {
 	n.m.Lock()
 	defer n.m.Unlock()
-	n.println(fmt.Sprintf("[Node#%d]%s connection closed", n.Loc, n.identifyConnection(c)))
 	if n.PrevNode.isConn(c) {
+		n.println(fmt.Sprintf("[Node#%d] PREV connection closed", n.Loc))
 		n.setPrev(nil, nil, 0)
 	}
 	if n.NextNode.isConn(c) {
+		n.println(fmt.Sprintf("[Node#%d] NEXT connection closed", n.Loc))
 		n.setNext(nil, nil, 0)
 	}
 	if n.OtherNode.isConn(c) {
-		if n.State == StateSplitting {
-			go func(addr *Address) {
-				time.Sleep(RETRY_DELAY/2 + time.Duration(rand.Intn(int(RETRY_DELAY/2))))
-				n.initiateSplitEdge(addr)
-			}(n.OtherNode.addr)
-			n.State = StateDone
-		}
+		n.println(fmt.Sprintf("[Node#%d] OTHER connection closed", n.Loc))
 		n.setOther(nil, nil, 0)
 	}
 }
 
 func (n *Node) MessageCallback(c *Connection, m *Message) {
+	if m.Action == ActionRandomWalk && m.Hops <= 1 {
+		m.Action = ActionSplitEdge
+	}
+
 	n.m.Lock()
 	defer n.m.Unlock()
 	n.println("----------------------------------------")
 	n.println(n)
 	n.println(fmt.Sprintf("[Node#%d] <-%s: %s", n.Loc, n.identifyConnection(c), m))
 
-	if m.Action == ActionRandomWalk && m.Hops <= 1 {
-		m.Action = ActionSplitEdge
-	}
-
 	switch m.Action {
 	case ActionSplitEdge:
 		if n.State == StateFree {
 			if c, err := ConnectTo(m.Addr, n.MessageCallback, n.closeCallback); err == nil {
+				// TODO: n.setState(StateSplittingPrev)
 				n.setState(StateSplitting)
 				n.setOther(c, m.Addr, m.Loc)
 				n.sendOther(NewHelloCCWMessage(n.Addr, n.Loc, m.Loc))
@@ -311,15 +358,17 @@ func (n *Node) MessageCallback(c *Connection, m *Message) {
 	case ActionMergeEdge:
 		if n.NextNode.isConn(c) {
 			if *n.NextNode.addr == *n.Addr && n.NextNode.loc == n.Loc {
+				// shortcut for a cycle node
 				n.PrevNode.c.Close()
 				n.NextNode.c.Close()
 				n.setState(StateDone)
 				n.cleanCB(n)
 			} else if n.State == StateFree {
 				if c, err := ConnectTo(m.Addr, n.MessageCallback, n.closeCallback); err == nil {
-					n.sendNext(NewShutdownMessage())
+					old := n.NextNode.c
 					n.setNext(c, m.Addr, m.Loc)
 					n.sendNext(NewHelloCCWMessage(n.Addr, n.Loc, m.Loc))
+					n.sendSpecial("OLD NEXT", old, NewShutdownMessage())
 				} else {
 					fmt.Fprintf(os.Stderr, "[Node#%d] !! Dial Error: %s\n", n.Loc, err)
 					n.sendNext(NewTryLaterMessage())
@@ -337,18 +386,22 @@ func (n *Node) MessageCallback(c *Connection, m *Message) {
 				fmt.Fprintf(os.Stderr, "[Node#%d] !! Dial Error: %s\n", n.Loc, err)
 				n.sendPrev(NewCancelMessage())
 			} else {
-				n.sendPrev(NewShutdownMessage())
+				old := n.PrevNode.c
+
 				n.setPrev(c, m.Addr, m.Loc)
 				n.sendPrev(NewHelloCWMessage(n.Addr, n.Loc, m.Loc))
+				n.sendSpecial("OLD PREV", old, NewShutdownMessage())
 			}
-		} else if n.NextNode.isConn(c) {
-			fmt.Fprintf(os.Stderr, "[Node#%d] !! from NEXT, should be PREV\n", n.Loc)
-			n.sendNext(NewCancelMessage())
 		} else {
-			fmt.Fprintf(os.Stderr, "[Node#%d] !! from OTHER, should be PREV\n", n.Loc)
-			n.sendOther(NewCancelMessage())
+			fmt.Fprintf(os.Stderr, "[Node#%d] !! not from PREV\n", n.Loc)
+			if n.NextNode.isConn(c) {
+				n.sendNext(NewCancelMessage())
+			} else {
+				n.sendOther(NewCancelMessage())
+			}
 		}
 	case ActionHelloCW:
+		// accept always?
 		if n.State == StateSplitting {
 			n.setNext(c, m.Addr, m.SrcLoc)
 			n.setState(StateFree)
@@ -366,29 +419,27 @@ func (n *Node) MessageCallback(c *Connection, m *Message) {
 			n.sendPrev(NewShutdownMessage())
 		}
 		n.setPrev(c, m.Addr, m.SrcLoc)
-		/* WATT
-		if n.State == StateMerging {
-			n.setState(StateFree)
-		}
-		*/
 	case ActionTryLater:
 		n.setState(StateFree)
 		go func() {
-			time.Sleep(RETRY_DELAY/2 + time.Duration(rand.Intn(int(RETRY_DELAY/2))))
+			time.Sleep(RETRY_DELAY + time.Duration(r.Int63n(int64(RETRY_VARIANCE))))
 			n.InitiateMergeEdge()
 		}()
 		n.println(fmt.Sprintf("[Node#%d] Retrying later...", n.Loc))
 	case ActionCancel:
+		// TODO: if n.State == StateSplittingPrev && n.NextNode.isConn(c) {
 		if n.State == StateSplitting && n.NextNode.isConn(c) {
 			n.OtherNode.c.Close()
+			n.setState(StateFree)
 		} else {
 			n.println(fmt.Sprintf("[Node#%d] Could not handle msg", n.Loc))
 		}
 	case ActionShutdown:
+		// TODO: if n.State == StateSplittingPrev && n.NextNode.isConn(c) {
 		if n.State == StateSplitting && n.NextNode.isConn(c) {
 			n.NextNode, n.OtherNode = n.OtherNode, n.NextNode
-			n.OtherNode.c.Close()
 			n.setState(StateFree)
+			n.OtherNode.c.Close()
 		} else if n.State == StateMerging && n.NextNode.isConn(c) {
 			n.PrevNode.c.Close()
 			n.NextNode.c.Close()
@@ -414,10 +465,11 @@ func (n *Node) MessageCallback(c *Connection, m *Message) {
 			content := m.Content
 			content = append(content, unparseAddress(n.Addr)...)
 			content = append(content, unparseLocation(n.Loc)...)
+			gm := NewGraphMessage(m.Addr, m.Loc, content)
 			if n.NextNode.isConn(c) {
-				n.sendPrev(NewGraphMessage(m.Addr, m.Loc, content))
+				n.sendPrev(gm)
 			} else if n.PrevNode.isConn(c) {
-				n.sendNext(NewGraphMessage(m.Addr, m.Loc, content))
+				n.sendNext(gm)
 			}
 		}
 	case ActionFish, ActionRandomWalk:

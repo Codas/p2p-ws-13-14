@@ -228,7 +228,7 @@ func (p *Peer) messageCB(n *Node, m *Message) {
 		// looking for a node that is free
 		var freenodes []*Node
 		for _, n := range p.nodes {
-			if n.State == StateFree {
+			if n.State.Ready() {
 				freenodes = append(freenodes, n)
 			}
 		}
@@ -264,7 +264,7 @@ func (p *Peer) fishLoop() {
 		// calculate degree (collect all real neighbour addresses)
 		var addresses []*Address
 		for _, n := range p.nodes {
-			if n.State == StateFree {
+			if n.State.Ready() {
 				addresses = p.addUniqueAddress(addresses, n.PrevNode.addr)
 				addresses = p.addUniqueAddress(addresses, n.NextNode.addr)
 			}
@@ -279,7 +279,7 @@ func (p *Peer) fishLoop() {
 			// atm send only to different peers
 			address := addresses[r.Intn(len(addresses))]
 			for _, n := range p.nodes {
-				if n.State == StateFree {
+				if n.State.Ready() {
 					if n.PrevNode.addr == address {
 						n.sendPrev(NewFishMessage(waterpart, fishpart, p.strength))
 						break
@@ -335,6 +335,7 @@ func (p *Peer) handleIncomingConnection(c *Connection, msg *Message) {
 	case ActionSplitEdge:
 		c.Close()
 		// create with extra hop
+		//hops := Hops(6)
 		hops := Hops(3*math.Log(float64(p.networksize))) + 1
 		if hops > 1 {
 			rwm := NewRandomWalkMessage(msg.Addr, msg.Loc, hops)
@@ -360,11 +361,13 @@ func (p *Peer) handleIncomingConnection(c *Connection, msg *Message) {
 		n = freenodes[r.Intn(len(freenodes))]
 	default:
 		fmt.Fprintf(os.Stderr, "[Global] invalid from %v: %s\n", c.Remote(), msg)
+		//c.Close()
 		return
 	}
 
 	if n == nil {
 		fmt.Fprintf(os.Stderr, "[Global] from %v -> Loc#%d not found: %s\n", c.Remote(), msg.DstLoc, msg)
+		//c.Close()
 		return
 	}
 

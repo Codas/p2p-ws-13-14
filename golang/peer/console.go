@@ -235,6 +235,7 @@ func writeDOTGraphs(g []*NodeAttr) {
 
 func graphCallback(g []*NodeAttr) {
 	if ticker != nil {
+		fmt.Println("Writing graph to file")
 		writeJSONGraph(g)
 		writeDOTGraphs(g)
 		return
