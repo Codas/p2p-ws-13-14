@@ -114,10 +114,12 @@ func NewNode(lAddr *Address, rAddr *Address, loc Location, verbose bool, clean C
 
 func NewCycleNode(lAddr *Address, loc Location, verbose bool, clean CleanCallbackFunc, message NodeMessageCallbackFunc) *Node {
 	n := &Node{
-		State: StateSplitting,
-		Addr:  lAddr,
-		Loc:   loc,
-		m:     new(sync.Mutex),
+		State:     StateSplitting,
+		InitState: 1,
+
+		Addr: lAddr,
+		Loc:  loc,
+		m:    new(sync.Mutex),
 
 		cleanCB:   clean,
 		messageCB: message,
@@ -410,17 +412,26 @@ func (n *Node) MessageCallback(c *Connection, m *Message) {
 		}
 	case ActionHelloCW:
 		// accept always?
-		if n.State == StateSplitting {
+		if n.State == StateDone {
+			n.setNext(c, m.Addr, m.SrcLoc)
+			n.State = StateSplitting
+			n.InitState = 2
+		} else if n.State == StateSplitting && n.InitState == 1 {
 			n.setNext(c, m.Addr, m.SrcLoc)
 			n.setState(StateFree)
+			n.InitState = 0
 		} else {
 			n.println(fmt.Sprintf("[Node#%d] Could not handle msg", n.Loc))
 			//fmt.Printf("[Node#%d] ------ could not handle (%s)\n", n.Loc, m)
 			n.printBacklog()
 		}
 	case ActionHelloCCW:
-		if n.State == StateDone {
+		if n.State == StateSplitting && n.InitState == 2 {
+			n.State = StateFree
+			n.InitState = 0
+		} else if n.State == StateDone {
 			n.State = StateSplitting
+			n.InitState = 1
 		}
 		if n.OtherNode.isConn(c) {
 			n.setOther(nil, nil, 0)
