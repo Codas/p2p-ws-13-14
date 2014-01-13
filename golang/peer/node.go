@@ -463,11 +463,26 @@ func (n *Node) MessageCallback(c *Connection, m *Message) {
 			n.NextNode, n.OtherNode = n.OtherNode, n.NextNode
 			n.setState(StateFree)
 			n.OtherNode.c.Close()
+		} else if n.State == StateMerging && n.PrevNode.isConn(c) {
+			if n.ShutdownState == 2 {
+				n.PrevNode.c.Close()
+				n.NextNode.c.Close()
+				n.setState(StateDone)
+				n.cleanCB(n)
+				n.ShutdownState = 0
+			} else {
+				n.ShutdownState = 1
+			}
 		} else if n.State == StateMerging && n.NextNode.isConn(c) {
-			n.PrevNode.c.Close()
-			n.NextNode.c.Close()
-			n.setState(StateDone)
-			n.cleanCB(n)
+			if n.ShutdownState == 1 {
+				n.PrevNode.c.Close()
+				n.NextNode.c.Close()
+				n.setState(StateDone)
+				n.cleanCB(n)
+				n.ShutdownState = 0
+			} else {
+				n.ShutdownState = 2
+			}
 		} else {
 			n.println(fmt.Sprintf("[Node#%d] Could not handle msg", n.Loc))
 			//fmt.Printf("[Node#%d] ------ could not handle (%s)\n", n.Loc, m)
