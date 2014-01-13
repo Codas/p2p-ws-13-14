@@ -78,7 +78,10 @@ type NodeAttr struct {
 }
 
 type Node struct {
-	State     NodeState
+	State         NodeState
+	ShutdownState int
+	InitState     int
+
 	Addr      *Address
 	Loc       Location
 	OtherNode *remoteNode
@@ -89,6 +92,7 @@ type Node struct {
 	cleanCB   CleanCallbackFunc
 	messageCB NodeMessageCallbackFunc
 
+	backlog string
 	verbose bool
 }
 
@@ -495,11 +499,20 @@ func (n *Node) identifyConnection(c *Connection) string {
 }
 
 func (n *Node) println(a ...interface{}) {
+	n.backlog += fmt.Sprintln(a...)
 	if n.verbose {
 		fmt.Println(a...)
 	}
 }
 
+func (n *Node) printBacklog() {
+	fmt.Println("[ # # # # # # # # # # # # # # # # # # # # # # # # # # ]")
+	fmt.Print(n.backlog)
+}
+
 func (n *Node) String() string {
+	if n.State == StateFree {
+		n.backlog = ""
+	}
 	return fmt.Sprintf("[Node#%d] [%s] %s<->%s (%s)", n.Loc, n.State, n.PrevNode, n.NextNode, n.OtherNode)
 }
