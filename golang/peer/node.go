@@ -382,6 +382,8 @@ func (n *Node) MessageCallback(c *Connection, m *Message) {
 			}
 		} else {
 			fmt.Fprintf(os.Stderr, "[Node#%d] !! not from NEXT\n", n.Loc)
+			//fmt.Printf("[Node#%d] ------ could not handle (%s) (not from NEXT)\n", n.Loc, m)
+			n.printBacklog()
 		}
 	case ActionRedirect:
 		if n.PrevNode.isConn(c) {
@@ -398,6 +400,8 @@ func (n *Node) MessageCallback(c *Connection, m *Message) {
 			}
 		} else {
 			fmt.Fprintf(os.Stderr, "[Node#%d] !! not from PREV\n", n.Loc)
+			//fmt.Printf("[Node#%d] ------ could not handle (%s) (not from PREV)\n", n.Loc, m)
+			n.printBacklog()
 			if n.NextNode.isConn(c) {
 				n.sendNext(NewCancelMessage())
 			} else {
@@ -411,6 +415,8 @@ func (n *Node) MessageCallback(c *Connection, m *Message) {
 			n.setState(StateFree)
 		} else {
 			n.println(fmt.Sprintf("[Node#%d] Could not handle msg", n.Loc))
+			//fmt.Printf("[Node#%d] ------ could not handle (%s)\n", n.Loc, m)
+			n.printBacklog()
 		}
 	case ActionHelloCCW:
 		if n.State == StateDone {
@@ -437,6 +443,8 @@ func (n *Node) MessageCallback(c *Connection, m *Message) {
 			n.setState(StateFree)
 		} else {
 			n.println(fmt.Sprintf("[Node#%d] Could not handle msg", n.Loc))
+			//fmt.Printf("[Node#%d] ------ could not handle (%s)\n", n.Loc, m)
+			n.printBacklog()
 		}
 	case ActionShutdown:
 		// TODO: if n.State == StateSplittingPrev && n.NextNode.isConn(c) {
@@ -451,6 +459,8 @@ func (n *Node) MessageCallback(c *Connection, m *Message) {
 			n.cleanCB(n)
 		} else {
 			n.println(fmt.Sprintf("[Node#%d] Could not handle msg", n.Loc))
+			//fmt.Printf("[Node#%d] ------ could not handle (%s)\n", n.Loc, m)
+			n.printBacklog()
 		}
 	case ActionBroadcast:
 		if *m.Addr == *n.Addr && m.Loc == n.Loc {
@@ -478,6 +488,9 @@ func (n *Node) MessageCallback(c *Connection, m *Message) {
 		}
 	case ActionFish, ActionRandomWalk:
 		n.messageCB(n, m)
+	default:
+		//fmt.Printf("[Node#%d] ------ could not handle (%s)\n", n.Loc, m)
+		n.printBacklog()
 	}
 }
 
