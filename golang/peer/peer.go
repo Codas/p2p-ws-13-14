@@ -12,7 +12,7 @@ import (
 )
 
 const HYSTERESIS = 0.5
-const FISH_INTERVAL = 1000 * time.Millisecond
+const FISH_INTERVAL = 250 * time.Millisecond
 
 var r = rand.New(rand.NewSource(time.Now().UnixNano()))
 
