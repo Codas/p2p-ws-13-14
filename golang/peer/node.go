@@ -427,7 +427,7 @@ func (n *Node) MessageCallback(c *Connection, m *Message) {
 		}
 	case ActionHelloCCW:
 		if n.State == StateSplitting && n.InitState == 2 {
-			n.setState(tateFree)
+			n.setState(StateFree)
 			n.InitState = 0
 		} else if n.State == StateDone {
 			n.setState(StateSplitting)
