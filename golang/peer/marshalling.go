@@ -3,7 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
+	"io"
 )
 
 type byteReader interface {
@@ -47,10 +47,8 @@ func parseLength(br byteReader) (length uint64, err error) {
 	buf := make([]byte, numbytes)
 	// clear out our three length bits
 	buf[0] = b & 31
-	if n, err := br.Read(buf[1:]); err != nil {
+	if _, err := io.ReadFull(br, buf[1:]); err != nil {
 		return 0, err
-	} else if n != numbytes-1 {
-		return 0, errors.New("Read length missmatch!")
 	}
 
 	// convert to uint64
@@ -173,10 +171,8 @@ func unparseContent(content []byte) []byte {
 
 func readN(br byteReader, length int) (b []byte, err error) {
 	buf := make([]byte, length)
-	if n, err := br.Read(buf); err != nil {
+	if _, err := io.ReadFull(br, buf); err != nil {
 		return nil, err
-	} else if n != length {
-		return nil, errors.New("Read length missmatch!")
 	}
 	return buf, nil
 }
