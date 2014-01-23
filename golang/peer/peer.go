@@ -30,6 +30,7 @@ type Peer struct {
 	fishticker  *time.Ticker
 	networksize float32
 	water, fish float32
+	d1, d2      float32
 	strength    uint32
 
 	shutdown bool
@@ -51,6 +52,8 @@ func NewPeer(port, verbosity int, graph GraphCallbackFunc) *Peer {
 
 		networksize: 1,
 		water:       1,
+		d1:          1,
+		d2:          1,
 		fish:        1,
 		strength:    r.Uint32(),
 
@@ -211,6 +214,8 @@ func (p *Peer) messageCB(n *Node, m *Message) {
 		p.graphCB(graph)
 	case ActionFish:
 		p.water += m.Water
+		p.d1 += m.D1
+		p.d2 += m.D2
 		if p.strength < m.Strength {
 			p.strength = m.Strength
 			p.fish = m.Fish
@@ -221,7 +226,7 @@ func (p *Peer) messageCB(n *Node, m *Message) {
 		}
 		// apply HYSTERESIS to new estimated networksize
 		p.networksize = p.networksize*(1-HYSTERESIS) + p.water/p.fish*HYSTERESIS
-		p.println(fmt.Sprintf("[Global] [FISH] new n=%.2f [w=%.3f/f=%.3f]", p.networksize, p.water, p.fish))
+		p.println(fmt.Sprintf("[Global] [FISH] new n=%.2f [w=%.3f/d1=%.3f/d2=%.3f/f=%.3f]", p.networksize, p.water, p.d1, p.d2, p.fish))
 	case ActionRandomWalk:
 		m.Hops -= 1
 
@@ -271,8 +276,12 @@ func (p *Peer) fishLoop() {
 		}
 		if len(addresses) != 0 {
 			waterpart := p.water / float32(len(addresses)+1)
+			d1part := p.d1 / float32(len(addresses)+1)
+			d2part := p.d2 / float32(len(addresses)+1)
 			fishpart := p.fish / float32(len(addresses)+1)
 			p.water -= waterpart
+			p.d1 -= d1part
+			p.d2 -= d2part
 			p.fish -= fishpart
 
 			// TODO: to whom do we want to send it? (only real neighbours? or possibly also to a different nodes of this very peer?)
@@ -281,10 +290,10 @@ func (p *Peer) fishLoop() {
 			for _, n := range p.nodes {
 				if n.State.Ready() {
 					if n.PrevNode.addr == address {
-						n.sendPrev(NewFishMessage(waterpart, fishpart, p.strength))
+						n.sendPrev(NewFishMessage(waterpart, d1part, d2part, fishpart, p.strength))
 						break
 					} else if n.NextNode.addr == address {
-						n.sendNext(NewFishMessage(waterpart, fishpart, p.strength))
+						n.sendNext(NewFishMessage(waterpart, d1part, d2part, fishpart, p.strength))
 						break
 					}
 				}

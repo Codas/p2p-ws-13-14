@@ -117,8 +117,16 @@ func unparseLocation(l Location) []byte {
 	return buf
 }
 
-func parseWaterFishStrength(br byteReader) (water float32, fish float32, strength uint32, err error) {
+func parseWaterFishStrength(br byteReader) (water float32, d1 float32, d2 float32, fish float32, strength uint32, err error) {
 	err = binary.Read(br, binary.LittleEndian, &water)
+	if err != nil {
+		return
+	}
+	err = binary.Read(br, binary.LittleEndian, &d1)
+	if err != nil {
+		return
+	}
+	err = binary.Read(br, binary.LittleEndian, &d2)
 	if err != nil {
 		return
 	}
@@ -133,10 +141,12 @@ func parseWaterFishStrength(br byteReader) (water float32, fish float32, strengt
 	return
 }
 
-func unparseWaterFishStrength(water float32, fish float32, strength uint32) []byte {
+func unparseWaterFishStrength(water float32, d1 float32, d2 float32, fish float32, strength uint32) []byte {
 	//buf := bytes.NewBuffer(make([]byte, 12))
 	buf := new(bytes.Buffer)
 	binary.Write(buf, binary.LittleEndian, water)
+	binary.Write(buf, binary.LittleEndian, d1)
+	binary.Write(buf, binary.LittleEndian, d2)
 	binary.Write(buf, binary.LittleEndian, fish)
 	binary.Write(buf, binary.LittleEndian, strength)
 	return buf.Bytes()
