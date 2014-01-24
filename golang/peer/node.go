@@ -12,6 +12,7 @@ const RETRY_VARIANCE = 200 * time.Millisecond
 
 type CleanCallbackFunc func(*Node)
 type NodeMessageCallbackFunc func(*Node, *Message)
+type DegreeCallbackFunc func()
 
 const (
 	// node states
@@ -91,12 +92,13 @@ type Node struct {
 
 	cleanCB   CleanCallbackFunc
 	messageCB NodeMessageCallbackFunc
+	degreeCB  DegreeCallbackFunc
 
 	backlog string
 	verbose bool
 }
 
-func NewNode(lAddr *Address, rAddr *Address, loc Location, verbose bool, clean CleanCallbackFunc, message NodeMessageCallbackFunc) *Node {
+func NewNode(lAddr *Address, rAddr *Address, loc Location, verbose bool, clean CleanCallbackFunc, message NodeMessageCallbackFunc, degreeCB DegreeCallbackFunc) *Node {
 	n := &Node{
 		State: StateDone,
 		Addr:  lAddr,
@@ -105,6 +107,7 @@ func NewNode(lAddr *Address, rAddr *Address, loc Location, verbose bool, clean C
 
 		cleanCB:   clean,
 		messageCB: message,
+		degreeCB:  degreeCB,
 
 		verbose: verbose,
 	}
@@ -112,7 +115,7 @@ func NewNode(lAddr *Address, rAddr *Address, loc Location, verbose bool, clean C
 	return n.initiateSplitEdge(rAddr)
 }
 
-func NewCycleNode(lAddr *Address, loc Location, verbose bool, clean CleanCallbackFunc, message NodeMessageCallbackFunc) *Node {
+func NewCycleNode(lAddr *Address, loc Location, verbose bool, clean CleanCallbackFunc, message NodeMessageCallbackFunc, degreeCB DegreeCallbackFunc) *Node {
 	n := &Node{
 		State:     StateSplitting,
 		InitState: 1,
@@ -123,6 +126,7 @@ func NewCycleNode(lAddr *Address, loc Location, verbose bool, clean CleanCallbac
 
 		cleanCB:   clean,
 		messageCB: message,
+		degreeCB:  degreeCB,
 
 		verbose: verbose,
 	}
@@ -277,6 +281,7 @@ func (n *Node) setPrev(c *Connection, addr *Address, loc Location) {
 	} else {
 		n.PrevNode = nil
 	}
+	n.degreeCB()
 	//n.println(fmt.Sprintf("[Node#%d] PrevNode: %s -> %s", n.Loc, oldNode, n.PrevNode))
 	n.println(n)
 }
@@ -293,6 +298,7 @@ func (n *Node) setNext(c *Connection, addr *Address, loc Location) {
 	} else {
 		n.NextNode = nil
 	}
+	n.degreeCB()
 	//n.println(fmt.Sprintf("[Node#%d] NextNode: %s -> %s", n.Loc, oldNode, n.NextNode))
 	n.println(n)
 }

@@ -38,8 +38,8 @@ type Message struct {
 	DstLoc Location
 
 	Water    float32
-	D1       float32
-	D2       float32
+	WD1      float32
+	WD2      float32
 	Fish     float32
 	Strength uint32
 
@@ -86,7 +86,7 @@ func (m *Message) String() string {
 	case ActionGraph:
 		me += fmt.Sprintf("(%s, %d, len=%d)", m.Addr, m.Loc, len(m.Content))
 	case ActionFish:
-		me += fmt.Sprintf("(water=%.2f, d1=%.2f, d2=%.2f, fish=%.2f, str=%d)", m.Water, m.D1, m.D2, m.Fish, m.Strength)
+		me += fmt.Sprintf("(water=%.2f, wd1=%.2f, wd2=%.2f, fish=%.2f, str=%d)", m.Water, m.WD1, m.WD2, m.Fish, m.Strength)
 	case ActionRandomWalk:
 		me += fmt.Sprintf("(%s, %d, hops=%d)", m.Addr, m.Loc, m.Hops)
 	}
@@ -171,12 +171,12 @@ func NewGraphMessage(addr *Address, loc Location, content []byte) *Message {
 	}
 }
 
-func NewFishMessage(water float32, d1 float32, d2 float32, fish float32, strength uint32) *Message {
+func NewFishMessage(water float32, wd1 float32, wd2 float32, fish float32, strength uint32) *Message {
 	return &Message{
 		Action:   ActionFish,
 		Water:    water,
-		D1:       water,
-		D2:       water,
+		WD1:      wd1,
+		WD2:      wd2,
 		Fish:     fish,
 		Strength: strength,
 	}

@@ -29,9 +29,11 @@ type Peer struct {
 
 	fishticker  *time.Ticker
 	networksize float32
+	t           float32
 	water, fish float32
-	d1, d2      float32
+	wd1, wd2    float32
 	strength    uint32
+	degree      int
 
 	shutdown bool
 	done     chan bool
@@ -51,9 +53,10 @@ func NewPeer(port, verbosity int, graph GraphCallbackFunc) *Peer {
 		m:    new(sync.RWMutex),
 
 		networksize: 1,
+		t:           0,
 		water:       1,
-		d1:          1,
-		d2:          1,
+		wd1:         0,
+		wd2:         0,
 		fish:        1,
 		strength:    r.Uint32(),
 
@@ -74,9 +77,9 @@ func NewPeer(port, verbosity int, graph GraphCallbackFunc) *Peer {
 func (p *Peer) AddNode(addr *Address) {
 	var n *Node
 	if addr == nil {
-		n = NewCycleNode(p.addr, p.uniqueLocation(), p.verbosity > 1, p.removeNode, p.messageCB)
+		n = NewCycleNode(p.addr, p.uniqueLocation(), p.verbosity > 1, p.removeNode, p.messageCB, p.degreeCB)
 	} else {
-		n = NewNode(p.addr, addr, p.uniqueLocation(), p.verbosity > 1, p.removeNode, p.messageCB)
+		n = NewNode(p.addr, addr, p.uniqueLocation(), p.verbosity > 1, p.removeNode, p.messageCB, p.degreeCB)
 	}
 	if n == nil {
 		return
@@ -214,8 +217,8 @@ func (p *Peer) messageCB(n *Node, m *Message) {
 		p.graphCB(graph)
 	case ActionFish:
 		p.water += m.Water
-		p.d1 += m.D1
-		p.d2 += m.D2
+		p.wd1 += m.WD1
+		p.wd2 += m.WD2
 		if p.strength < m.Strength {
 			p.strength = m.Strength
 			p.fish = m.Fish
@@ -226,7 +229,8 @@ func (p *Peer) messageCB(n *Node, m *Message) {
 		}
 		// apply HYSTERESIS to new estimated networksize
 		p.networksize = p.networksize*(1-HYSTERESIS) + p.water/p.fish*HYSTERESIS
-		p.println(fmt.Sprintf("[Global] [FISH] new n=%.2f [w=%.3f/d1=%.3f/d2=%.3f/f=%.3f]", p.networksize, p.water, p.d1, p.d2, p.fish))
+		p.t = p.t*(1-HYSTERESIS) + float32(math.Pow(float64(p.d1()), 2)) / (p.d2() - 2 * p.d1())*HYSTERESIS
+		p.println(fmt.Sprintf("[Global] [FISH] new n=%.2f, t=%.2f [w=%.3f/d1=%.3f/d2=%.3f/f=%.3f]", p.networksize, p.t, p.water, p.d1(), p.d2(), p.fish))
 	case ActionRandomWalk:
 		m.Hops -= 1
 
@@ -261,39 +265,62 @@ func (p *Peer) messageCB(n *Node, m *Message) {
 	}
 }
 
+func (p *Peer) degreeCB() {
+	var oldDegree = p.degree
+	p.caclcDegree()
+	var dDiff = p.degree - oldDegree
+	if dDiff > 0 {
+	  p.println(fmt.Sprintf("[Global] [Degree] Degree changed by +%d", dDiff))
+		p.wd1 += float32(dDiff)
+		p.wd2 += float32(math.Pow(float64(p.degree), 2) - math.Pow(float64(oldDegree), 2))
+	}
+}
+
+func (p *Peer) remotePeers() []*Address {
+	// calculate degree (collect all real neighbour addresses)
+	var addresses []*Address
+	for _, n := range p.nodes {
+		if n.State.Ready() {
+			addresses = p.addUniqueAddress(addresses, n.PrevNode.addr)
+			addresses = p.addUniqueAddress(addresses, n.NextNode.addr)
+		}
+	}
+	return addresses
+}
+
+func (p *Peer) caclcDegree() int {
+	// calculate degree (collect all real neighbour addresses)
+	p.degree = len(p.remotePeers())
+	return p.degree
+}
+
 func (p *Peer) fishLoop() {
 	// TODO: perhaps adjust timer -> race to equilibrium?
 	p.fishticker = time.NewTicker(FISH_INTERVAL)
 	for _ = range p.fishticker.C {
 		p.m.RLock()
-		// calculate degree (collect all real neighbour addresses)
-		var addresses []*Address
-		for _, n := range p.nodes {
-			if n.State.Ready() {
-				addresses = p.addUniqueAddress(addresses, n.PrevNode.addr)
-				addresses = p.addUniqueAddress(addresses, n.NextNode.addr)
-			}
-		}
-		if len(addresses) != 0 {
-			waterpart := p.water / float32(len(addresses)+1)
-			d1part := p.d1 / float32(len(addresses)+1)
-			d2part := p.d2 / float32(len(addresses)+1)
-			fishpart := p.fish / float32(len(addresses)+1)
-			p.water -= waterpart
-			p.d1 -= d1part
-			p.d2 -= d2part
-			p.fish -= fishpart
+		var addresses = p.remotePeers()
+		if p.degree != 0 {
+			waterpart	:= p.water / float32(p.degree+1)
+			wd1part		:= p.wd1   / float32(p.degree+1)
+			wd2part		:= p.wd2   / float32(p.degree+1)
+			fishpart	:= p.fish  / float32(p.degree+1)
+			p.water	-= waterpart
+			p.wd1		-= wd1part
+			p.wd2		-= wd2part
+			p.fish	-= fishpart
 
-			// TODO: to whom do we want to send it? (only real neighbours? or possibly also to a different nodes of this very peer?)
+			// TODO: to whom do we want to send it? (only real neighbours? or possibly
+			// also to a different nodes of this very peer?)
 			// atm send only to different peers
 			address := addresses[r.Intn(len(addresses))]
 			for _, n := range p.nodes {
 				if n.State.Ready() {
 					if n.PrevNode.addr == address {
-						n.sendPrev(NewFishMessage(waterpart, d1part, d2part, fishpart, p.strength))
+						n.sendPrev(NewFishMessage(waterpart, wd1part, wd2part, fishpart, p.strength))
 						break
 					} else if n.NextNode.addr == address {
-						n.sendNext(NewFishMessage(waterpart, d1part, d2part, fishpart, p.strength))
+						n.sendNext(NewFishMessage(waterpart, wd1part, wd2part, fishpart, p.strength))
 						break
 					}
 				}
@@ -383,6 +410,15 @@ func (p *Peer) handleIncomingConnection(c *Connection, msg *Message) {
 	p.println(fmt.Sprintf("[Global] from %v -> Loc#%d: %s", c.Remote(), n.Loc, msg))
 
 	n.MessageCallback(c, msg)
+}
+
+
+func (p *Peer) d1() float32 {
+	return p.wd1 / p.fish
+}
+
+func (p *Peer) d2() float32 {
+	return p.wd2 / p.fish
 }
 
 func (p *Peer) uniqueLocation() Location {
