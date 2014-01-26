@@ -25,6 +25,8 @@ type Peer struct {
 	nodes []*Node
 	m     *sync.RWMutex
 
+	content []string
+
 	graphCB GraphCallbackFunc
 
 	fishticker  *time.Ticker
@@ -174,7 +176,10 @@ func (p *Peer) GenerateGraph() {
 }
 
 func (p *Peer) StoreContent(content string) {
-
+	// TODO: use better calculation
+	hops := Hops(12)
+	m := NewCastStoreMessage(hops, []byte(content))
+	p.messageCB(nil, nil, m)
 }
 
 func (p *Peer) SearchContent(content string) {
@@ -266,7 +271,40 @@ func (p *Peer) messageCB(n *Node, nremote *remoteNode, m *Message) {
 		} else {
 			go node.SendNext(m)
 		}
+	case ActionCastStore:
+		// store content here
+		p.content = append(p.content, string(m.Content))
+		p.println(fmt.Sprintf("[Global] Storing Content: %s", string(m.Content)))
+
+		if m.Hops < 2 {
+			return
+		}
+
+		// get remote peers (without neighbour, where this message came from)
+		var filterAddr *Address
+		if nremote != nil {
+			// we didnt start this store request, filter neighbour
+			filterAddr = nremote.addr
+		}
+		addresses := p.remotePeers(filterAddr)
+		if len(addresses) == 0 {
+			println(fmt.Sprintf("[Global] Can't resend CastStore (no remote peers) %s", string(m.Content)))
+			return
+		}
+
+		hops := m.Hops - 1
+		if len(addresses) == 1 {
+			// send to 1 random neighbour
+			address := addresses[r.Intn(len(addresses))]
+			p.sendToAddress(*address, NewCastStoreMessage(hops, m.Content))
 		} else {
+			// send to 2 random neighbours
+			hop := []Hops{hops / 2, hops - hops/2}
+			perm := r.Perm(len(addresses))
+			for i := range hop {
+				if hop[i] > 0 {
+					p.sendToAddress(*addresses[perm[i]], NewCastStoreMessage(hop[i], m.Content))
+				}
 			}
 		}
 	}

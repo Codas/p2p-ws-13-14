@@ -518,7 +518,7 @@ func (n *Node) MessageCallback(c *Connection, m *Message) {
 				n.sendNext(gm)
 			}
 		}
-	case ActionFish, ActionRandomWalk:
+	case ActionFish, ActionRandomWalk, ActionCastStore, ActionCastSearch, ActionCastReply:
 		n.messageCB(n, n.remoteNode(c), m)
 	default:
 		//fmt.Printf("[Node#%d] ------ could not handle (%s)\n", n.Loc, m)
