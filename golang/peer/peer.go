@@ -17,6 +17,7 @@ const FISH_INTERVAL = 250 * time.Millisecond
 var r = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 type GraphCallbackFunc func([]*NodeAttr)
+type SearchCallbackFunc func(string)
 
 type Peer struct {
 	l    net.Listener
@@ -27,7 +28,8 @@ type Peer struct {
 
 	content [][]byte
 
-	graphCB GraphCallbackFunc
+	graphCB  GraphCallbackFunc
+	searchCB SearchCallbackFunc
 
 	fishticker  *time.Ticker
 	networksize float32
@@ -43,7 +45,7 @@ type Peer struct {
 	verbosity int
 }
 
-func NewPeer(port, verbosity int, graph GraphCallbackFunc) *Peer {
+func NewPeer(port, verbosity int, graph GraphCallbackFunc, search SearchCallbackFunc) *Peer {
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Listening Error: %s\n", err)
@@ -62,8 +64,9 @@ func NewPeer(port, verbosity int, graph GraphCallbackFunc) *Peer {
 		fish:        1,
 		strength:    r.Uint32(),
 
-		done:    make(chan bool),
-		graphCB: graph,
+		done:     make(chan bool),
+		graphCB:  graph,
+		searchCB: search,
 
 		verbosity: verbosity,
 	}
@@ -320,7 +323,22 @@ func (p *Peer) messageCB(n *Node, nremote *remoteNode, m *Message) {
 			}
 		}
 		if len(response) > 0 {
-			// TODO: reply
+			// reply
+			var reply []byte
+			for _, c := range response {
+				reply = append(reply, c...)
+				reply = append(reply, ',', ' ')
+			}
+			replymsg := NewCastReplyMessage(reply[:len(reply)-2])
+			if !p.sendToAddress(*m.Addr, replymsg) {
+				// not already connected to searching peer, connect
+				if c, err := ConnectTo(m.Addr, p.handleIncomingConnection, nil); err == nil {
+					c.SendMessage(replymsg)
+					c.Close()
+				} else {
+					fmt.Fprintf(os.Stderr, "[Global] !! Dial Error for ActionCastReply: %s\n", err)
+				}
+			}
 		}
 		p.m.RUnlock()
 		p.println(1, fmt.Sprintf("[Global] Looking up content: %s", string(m.Content)))
@@ -357,10 +375,11 @@ func (p *Peer) messageCB(n *Node, nremote *remoteNode, m *Message) {
 			}
 		}
 	case ActionCastReply:
+		p.searchCB(string(m.Content))
 	}
 }
 
-func (p *Peer) sendToAddress(address Address, m *Message) {
+func (p *Peer) sendToAddress(address Address, m *Message) bool {
 	p.m.RLock()
 	defer p.m.RUnlock()
 	for _, n := range p.nodes {
@@ -369,12 +388,13 @@ func (p *Peer) sendToAddress(address Address, m *Message) {
 		}
 		if *n.PrevNode.addr == address {
 			go n.SendPrev(m)
-			break
+			return true
 		} else if *n.NextNode.addr == address {
 			go n.SendNext(m)
-			break
+			return true
 		}
 	}
+	return false
 }
 
 func (p *Peer) degreeCB() {
@@ -490,6 +510,10 @@ func (p *Peer) handleIncomingConnection(c *Connection, msg *Message) {
 		}
 
 		n = freenodes[r.Intn(len(freenodes))]
+	case ActionCastReply:
+		c.Close()
+		p.messageCB(nil, nil, msg)
+		return
 	default:
 		fmt.Fprintf(os.Stderr, "[Global] invalid from %v: %s\n", c.Remote(), msg)
 		//c.Close()

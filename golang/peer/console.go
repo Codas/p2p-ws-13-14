@@ -18,7 +18,7 @@ var (
 func main() {
 	flag.Parse()
 
-	p := NewPeer(*port, *verbosity, graphCallback)
+	p := NewPeer(*port, *verbosity, graphCallback, searchCallback)
 
 	consoleLoop(p)
 
@@ -168,9 +168,10 @@ func togglePeriodicGraphFile(p *Peer, text string) {
 	}
 
 	// periodically generate graph
-	fmt.Printf("Activating periodic graph query (interval: %d ms)", interval)
+	fmt.Printf("Activating periodic graph query (interval: %d ms)\n", interval)
 	ticker = time.NewTicker(time.Duration(interval) * time.Millisecond)
 	go func(t *time.Ticker) {
+		p.GenerateGraph()
 		for _ = range t.C {
 			p.GenerateGraph()
 		}
@@ -242,7 +243,7 @@ func writeDOTGraphs(g []*NodeAttr) {
 func graphCallback(g []*NodeAttr) {
 	if ticker != nil {
 		fmt.Println("Writing graph to file")
-		writeJSONGraph(g)
+		//writeJSONGraph(g)
 		writeDOTGraphs(g)
 		return
 	}
@@ -251,4 +252,8 @@ func graphCallback(g []*NodeAttr) {
 		fmt.Printf(" -> (%d:%d)", n.Addr.Port, n.Loc)
 	}
 	fmt.Print("\n")
+}
+
+func searchCallback(reply string) {
+	fmt.Printf("Search reply: %s\n", reply)
 }

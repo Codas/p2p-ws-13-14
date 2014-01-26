@@ -17,7 +17,7 @@ import (
 var (
 	port       = flag.Int("p", 9000, "first port of a range, where clients listen on")
 	executable = flag.String("x", "../peer/peer.exe", "Executable file that starts a peer")
-	verbosity  = flag.Int("v", 2, "verbosity level [0=none, 1=only peer, 2=also nodes]")
+	verbosity  = flag.Int("v", 3, "verbosity level [0=none, 1=important peer, 2=all peer, 3=also nodes]")
 	delay      = flag.Int("d", 50, "Delay in ms between starting of peers")
 )
 
