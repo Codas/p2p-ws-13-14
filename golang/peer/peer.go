@@ -25,7 +25,7 @@ type Peer struct {
 	nodes []*Node
 	m     *sync.RWMutex
 
-	content []string
+	content [][]byte
 
 	graphCB GraphCallbackFunc
 
@@ -67,7 +67,7 @@ func NewPeer(port, verbosity int, graph GraphCallbackFunc) *Peer {
 
 		verbosity: verbosity,
 	}
-	p.println(fmt.Sprintf("[Global] Started listening on %v", l.Addr()))
+	p.println(1, fmt.Sprintf("[Global] Started listening on %v", l.Addr()))
 
 	go p.acceptLoop()
 	go p.fishLoop()
@@ -79,9 +79,9 @@ func NewPeer(port, verbosity int, graph GraphCallbackFunc) *Peer {
 func (p *Peer) AddNode(addr *Address) {
 	var n *Node
 	if addr == nil {
-		n = NewCycleNode(p.addr, p.uniqueLocation(), p.verbosity > 1, p.removeNode, p.messageCB, p.degreeCB)
+		n = NewCycleNode(p.addr, p.uniqueLocation(), p.verbosity >= 3, p.removeNode, p.messageCB, p.degreeCB)
 	} else {
-		n = NewNode(p.addr, addr, p.uniqueLocation(), p.verbosity > 1, p.removeNode, p.messageCB, p.degreeCB)
+		n = NewNode(p.addr, addr, p.uniqueLocation(), p.verbosity >= 3, p.removeNode, p.messageCB, p.degreeCB)
 	}
 	if n == nil {
 		return
@@ -178,12 +178,13 @@ func (p *Peer) GenerateGraph() {
 func (p *Peer) StoreContent(content string) {
 	// TODO: use better calculation
 	hops := Hops(12)
-	m := NewCastStoreMessage(hops, []byte(content))
-	p.messageCB(nil, nil, m)
+	p.messageCB(nil, nil, NewCastStoreMessage(hops, []byte(content)))
 }
 
 func (p *Peer) SearchContent(content string) {
-
+	// TODO: use better calculation
+	hops := Hops(12)
+	p.messageCB(nil, nil, NewCastSearchMessage(p.addr, hops, []byte(content)))
 }
 
 func (p *Peer) Shutdown() {
@@ -206,14 +207,14 @@ func (p *Peer) SetVerbosityLevel(level int) {
 
 	p.verbosity = level
 	for _, n := range p.nodes {
-		n.SetVerbosity(level > 1)
+		n.SetVerbosity(level >= 3)
 	}
 }
 
 func (p *Peer) messageCB(n *Node, nremote *remoteNode, m *Message) {
 	switch m.Action {
 	case ActionBroadcast:
-		p.println(fmt.Sprintf("[Global] [BROADCAST] %s", string(m.Content)))
+		p.println(1, fmt.Sprintf("[Global] [BROADCAST] %s", string(m.Content)))
 	case ActionGraph:
 		var graph []*NodeAttr
 		b := bytes.NewReader(m.Content)
@@ -246,7 +247,7 @@ func (p *Peer) messageCB(n *Node, nremote *remoteNode, m *Message) {
 		// apply HYSTERESIS to new estimated networksize
 		p.networksize = p.networksize*(1-HYSTERESIS) + p.water/p.fish*HYSTERESIS
 		p.t = p.t*(1-HYSTERESIS) + (d1*d1)/(d2-2*d1)*HYSTERESIS
-		p.println(fmt.Sprintf("[Global] [FISH] new n=%.2f, t=%.2f [w=%.3f/d1=%.3f/d2=%.3f/f=%.3f]", p.networksize, p.t, p.water, d1, d2, p.fish))
+		p.println(2, fmt.Sprintf("[Global] [FISH] new n=%.2f, t=%.2f [w=%.3f/d1=%.3f/d2=%.3f/f=%.3f]", p.networksize, p.t, p.water, d1, d2, p.fish))
 	case ActionRandomWalk:
 		m.Hops -= 1
 
@@ -261,7 +262,7 @@ func (p *Peer) messageCB(n *Node, nremote *remoteNode, m *Message) {
 		p.m.RUnlock()
 
 		if len(freenodes) == 0 {
-			p.println(fmt.Sprintf("[Global] No Free Node: %s", m))
+			p.println(3, fmt.Sprintf("[Global] ActionRandomWalk: No Free Node: %s", m))
 			return
 		}
 
@@ -273,17 +274,19 @@ func (p *Peer) messageCB(n *Node, nremote *remoteNode, m *Message) {
 		}
 	case ActionCastStore:
 		// store content here
-		p.content = append(p.content, string(m.Content))
-		p.println(fmt.Sprintf("[Global] Storing Content: %s", string(m.Content)))
+		p.m.Lock()
+		p.content = append(p.content, m.Content)
+		p.m.Unlock()
+		p.println(1, fmt.Sprintf("[Global] Storing Content: %s", string(m.Content)))
 
 		if m.Hops < 2 {
 			return
 		}
 
-		// get remote peers (without neighbour, where this message came from)
+		// get remote peers
 		var filterAddr *Address
 		if nremote != nil {
-			// we didnt start this store request, filter neighbour
+			// we didnt start this store request, filter neighbour where this came from
 			filterAddr = nremote.addr
 		}
 		addresses := p.remotePeers(filterAddr)
@@ -307,6 +310,53 @@ func (p *Peer) messageCB(n *Node, nremote *remoteNode, m *Message) {
 				}
 			}
 		}
+	case ActionCastSearch:
+		// lookup content here
+		p.m.RLock()
+		var response [][]byte
+		for _, c := range p.content {
+			if bytes.Contains(bytes.ToLower(c), bytes.ToLower(m.Content)) {
+				response = append(response, c)
+			}
+		}
+		if len(response) > 0 {
+			// TODO: reply
+		}
+		p.m.RUnlock()
+		p.println(1, fmt.Sprintf("[Global] Looking up content: %s", string(m.Content)))
+
+		if m.Hops < 2 {
+			return
+		}
+
+		// get remote peers
+		var filterAddr *Address
+		if nremote != nil {
+			// we didnt start this search request, filter neighbour where this came from
+			filterAddr = nremote.addr
+		}
+		addresses := p.remotePeers(filterAddr)
+		if len(addresses) == 0 {
+			println(fmt.Sprintf("[Global] Can't resend CastSearch (no remote peers) %s", string(m.Content)))
+			return
+		}
+
+		hops := m.Hops - 1
+		if len(addresses) == 1 {
+			// send to 1 random neighbour
+			address := addresses[r.Intn(len(addresses))]
+			p.sendToAddress(*address, NewCastSearchMessage(m.Addr, hops, m.Content))
+		} else {
+			// send to 2 random neighbours
+			hop := []Hops{hops / 2, hops - hops/2}
+			perm := r.Perm(len(addresses))
+			for i := range hop {
+				if hop[i] > 0 {
+					p.sendToAddress(*addresses[perm[i]], NewCastSearchMessage(m.Addr, hop[i], m.Content))
+				}
+			}
+		}
+	case ActionCastReply:
 	}
 }
 
@@ -332,7 +382,7 @@ func (p *Peer) degreeCB() {
 	p.degree = len(p.remotePeers(nil))
 	var dDiff = p.degree - oldDegree
 	if dDiff > 0 {
-		p.println(fmt.Sprintf("[Global] [Degree] Degree changed by +%d", dDiff))
+		p.println(2, fmt.Sprintf("[Global] [Degree] Degree changed by +%d", dDiff))
 		p.wd1 += float32(dDiff)
 		p.wd2 += float32(p.degree*p.degree - oldDegree*oldDegree)
 	}
@@ -395,7 +445,7 @@ func (p *Peer) acceptLoop() {
 			fmt.Fprintf(os.Stderr, "Accept Error: %s\n", err)
 			return
 		}
-		p.println(fmt.Sprintf("[Global] New Connection from %v", c.RemoteAddr()))
+		p.println(3, fmt.Sprintf("[Global] New Connection from %v", c.RemoteAddr()))
 
 		NewConnection(c, p.handleIncomingConnection, nil)
 	}
@@ -435,7 +485,7 @@ func (p *Peer) handleIncomingConnection(c *Connection, msg *Message) {
 		}
 
 		if len(freenodes) == 0 {
-			p.println(fmt.Sprintf("[Global] from %v, No Free Node: Closing Conn: %s", c.Remote(), msg))
+			p.println(3, fmt.Sprintf("[Global] from %v, No Free Node: Closing Conn: %s", c.Remote(), msg))
 			return
 		}
 
@@ -452,7 +502,7 @@ func (p *Peer) handleIncomingConnection(c *Connection, msg *Message) {
 		return
 	}
 
-	p.println(fmt.Sprintf("[Global] from %v -> Loc#%d: %s", c.Remote(), n.Loc, msg))
+	p.println(3, fmt.Sprintf("[Global] from %v -> Loc#%d: %s", c.Remote(), n.Loc, msg))
 
 	n.MessageCallback(c, msg)
 }
@@ -496,8 +546,8 @@ func (p *Peer) removeNode(n *Node) {
 	}
 }
 
-func (p *Peer) println(a ...interface{}) {
-	if p.verbosity > 0 {
+func (p *Peer) println(verbosity int, a ...interface{}) {
+	if p.verbosity >= verbosity {
 		fmt.Println(a...)
 	}
 }
