@@ -18,7 +18,7 @@ var (
 	port       = flag.Int("p", 9000, "first port of a range, where clients listen on")
 	executable = flag.String("x", "../peer/peer.exe", "Executable file that starts a peer")
 	verbosity  = flag.Int("v", 3, "verbosity level [0=none, 1=important peer, 2=all peer, 3=also nodes]")
-	delay      = flag.Int("d", 50, "Delay in ms between starting of peers")
+	delay      = flag.Int("d", 0, "Delay in ms between starting of peers")
 )
 
 var pool []*Client
@@ -94,6 +94,8 @@ func consoleLoop() {
 				fmt.Fprintf(os.Stderr, "Error: parameter needs to have form '<num>' (%s)\n", err)
 			}
 			shutdownClients(num)
+		case "all":
+			sendCommandtoAll(args)
 		case "c":
 			var port int
 			var peercmd string
@@ -116,6 +118,7 @@ func printHelp() {
 	fmt.Println("- v <level> (set verbosity level [2 = all, 1 = only peer])")
 	fmt.Println("- n <num> <nodes> (start <num> new peers with <nodes> nodes each)")
 	fmt.Println("- s <num> (shutdown <num> peers)")
+	fmt.Println("- all <cmd> (send <cmd> to all peers)")
 	fmt.Println("- c <port> <cmd> (send <cmd> to peer with <port>)")
 }
 
@@ -131,9 +134,6 @@ func startupClients(clients, locations int) {
 		pool = append(pool, c)
 		m.Unlock()
 		*port++
-		if *delay != 0 && i != clients-1 {
-			time.Sleep(time.Duration(*delay) * time.Millisecond)
-		}
 	}
 }
 
@@ -182,6 +182,9 @@ func startupClient(port int, locations int) (c *Client, err error) {
 			// always connect on the same node to test random walk
 			p := pool[0] //pool[rand.Intn(len(pool))]
 			c.sendCommand(fmt.Sprintf("c :%d", p.port))
+			if *delay != 0 {
+				time.Sleep(time.Duration(*delay) * time.Millisecond)
+			}
 		}
 	}
 	m.RUnlock()
@@ -194,6 +197,16 @@ func printReader(port int, r io.Reader, w io.Writer) {
 
 	for scanner.Scan() {
 		fmt.Fprintf(w, "[%d] %s\n", port, scanner.Text())
+	}
+}
+
+func sendCommandtoAll(cmd string) {
+	m.RLock()
+	defer m.RUnlock()
+
+	for _, c := range pool {
+		c.sendCommand(cmd)
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
