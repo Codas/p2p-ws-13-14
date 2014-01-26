@@ -293,7 +293,7 @@ func (p *Peer) sendToAddress(address Address, m *Message) {
 
 func (p *Peer) degreeCB() {
 	var oldDegree = p.degree
-	p.caclcDegree()
+	p.degree = len(p.remotePeers(nil))
 	var dDiff = p.degree - oldDegree
 	if dDiff > 0 {
 		p.println(fmt.Sprintf("[Global] [Degree] Degree changed by +%d", dDiff))
@@ -302,22 +302,18 @@ func (p *Peer) degreeCB() {
 	}
 }
 
-func (p *Peer) remotePeers() []*Address {
+func (p *Peer) remotePeers(filter *Address) []*Address {
+	p.m.RLock()
+	defer p.m.RUnlock()
 	// calculate degree (collect all real neighbour addresses)
 	var addresses []*Address
 	for _, n := range p.nodes {
 		if n.State.Ready() {
-			addresses = p.addUniqueAddress(addresses, n.PrevNode.addr)
-			addresses = p.addUniqueAddress(addresses, n.NextNode.addr)
+			addresses = p.addUniqueAddress(addresses, n.PrevNode.addr, filter)
+			addresses = p.addUniqueAddress(addresses, n.NextNode.addr, filter)
 		}
 	}
 	return addresses
-}
-
-func (p *Peer) caclcDegree() int {
-	// calculate degree (collect all real neighbour addresses)
-	p.degree = len(p.remotePeers())
-	return p.degree
 }
 
 func (p *Peer) fishLoop() {
@@ -325,7 +321,7 @@ func (p *Peer) fishLoop() {
 	p.fishticker = time.NewTicker(FISH_INTERVAL)
 	for _ = range p.fishticker.C {
 		p.m.RLock()
-		var addresses = p.remotePeers()
+		var addresses = p.remotePeers(nil)
 		if p.degree != 0 {
 			waterpart := p.water / float32(p.degree+1)
 			wd1part := p.wd1 / float32(p.degree+1)
@@ -346,8 +342,8 @@ func (p *Peer) fishLoop() {
 	}
 }
 
-func (p *Peer) addUniqueAddress(addresses []*Address, address *Address) []*Address {
-	if *address == *p.addr {
+func (p *Peer) addUniqueAddress(addresses []*Address, address, filter *Address) []*Address {
+	if *address == *p.addr || *address == *filter {
 		return addresses
 	}
 	for _, a := range addresses {
