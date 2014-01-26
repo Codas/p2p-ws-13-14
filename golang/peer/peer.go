@@ -386,7 +386,7 @@ func (p *Peer) newContent(content []byte) {
 			return
 		}
 	}
-	p.content = append(p.content, m.Content)
+	p.content = append(p.content, content)
 }
 
 func (p *Peer) sendToAddress(address Address, m *Message) bool {
