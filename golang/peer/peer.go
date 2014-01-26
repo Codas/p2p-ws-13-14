@@ -13,6 +13,8 @@ import (
 
 const HYSTERESIS = 0.5
 const FISH_INTERVAL = 250 * time.Millisecond
+const USE_LOAD_RATIO = true
+const LOAD_RATIO = 1.5
 
 var r = rand.New(rand.NewSource(time.Now().UnixNano()))
 
@@ -188,16 +190,31 @@ func (p *Peer) StoreContent(content string) {
 	// TODO: use better calculation
 	//hops := Hops(12)
 	//hops := Hops(float64(p.certainty) * math.Sqrt(float64(p.networksize)))
-	hops := Hops(float64(p.certainty) * math.Sqrt(float64(p.t)))
-	p.messageCB(nil, nil, NewCastStoreMessage(hops, []byte(content)))
+	if USE_LOAD_RATIO {
+		dataWeight := float32(float64(p.certainty) * math.Sqrt(float64(p.t)*LOAD_RATIO))
+		hops := Hops(dataWeight)
+		p.println(1, fmt.Sprintf("[Global] [Store] w=%.2f", dataWeight))
+		p.messageCB(nil, nil, NewCastStoreMessage(hops, []byte(content)))
+	} else {
+		hops := Hops(float64(p.certainty) * math.Sqrt(float64(p.t)))
+		p.messageCB(nil, nil, NewCastStoreMessage(hops, []byte(content)))
+	}
 }
 
 func (p *Peer) SearchContent(content string) {
 	// TODO: use better calculation
 	//hops := Hops(12)
 	//hops := Hops(float64(p.certainty) * math.Sqrt(float64(p.networksize)))
-	hops := Hops(float64(p.certainty) * math.Sqrt(float64(p.t)))
-	p.messageCB(nil, nil, NewCastSearchMessage(p.addr, hops, []byte(content)))
+
+	if USE_LOAD_RATIO {
+		queryWeight := float32(float64(p.certainty) * math.Sqrt(float64(p.t)/LOAD_RATIO))
+		hops := Hops(queryWeight)
+		p.println(1, fmt.Sprintf("[Global] [Search] w=%.2f", queryWeight))
+		p.messageCB(nil, nil, NewCastSearchMessage(p.addr, hops, []byte(content)))
+	} else {
+		hops := Hops(float64(p.certainty) * math.Sqrt(float64(p.t)))
+		p.messageCB(nil, nil, NewCastSearchMessage(p.addr, hops, []byte(content)))
+	}
 }
 
 func (p *Peer) Shutdown() {
@@ -265,6 +282,11 @@ func (p *Peer) messageCB(n *Node, nremote *remoteNode, m *Message) {
 		// apply HYSTERESIS to new estimated networksize
 		p.networksize = p.networksize*(1-HYSTERESIS) + p.water/p.fish*HYSTERESIS
 		p.t = p.t*(1-HYSTERESIS) + (d1*d1)/(d2-2*d1)*HYSTERESIS
+
+		if math.IsInf(float64(p.t), 1) {
+			p.t = (d1 * d1) / (d2 - 2*d1)
+		}
+
 		p.println(2, fmt.Sprintf("[Global] [FISH] new n=%.2f, t=%.2f [w=%.3f/d1=%.3f/d2=%.3f/f=%.3f]", p.networksize, p.t, p.water, d1, d2, p.fish))
 	case ActionRandomWalk:
 		m.Hops -= 1
