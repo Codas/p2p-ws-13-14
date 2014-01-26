@@ -16,6 +16,9 @@ const (
 	ActionGraph
 	ActionFish
 	ActionRandomWalk
+	ActionCastStore
+	ActionCastSearch
+	ActionCastReply
 )
 
 const (
@@ -74,6 +77,12 @@ func (m *Message) String() string {
 		me = "Fish"
 	case ActionRandomWalk:
 		me = "RandomWalk"
+	case ActionCastStore:
+		me = "CastStore"
+	case ActionCastSearch:
+		me = "CastSearch"
+	case ActionCastReply:
+		me = "CastReply"
 	}
 
 	switch m.Action {
@@ -89,6 +98,12 @@ func (m *Message) String() string {
 		me += fmt.Sprintf("(water=%.2f, wd1=%.2f, wd2=%.2f, fish=%.2f, str=%d)", m.Water, m.WD1, m.WD2, m.Fish, m.Strength)
 	case ActionRandomWalk:
 		me += fmt.Sprintf("(%s, %d, hops=%d)", m.Addr, m.Loc, m.Hops)
+	case ActionCastStore:
+		me += fmt.Sprintf("(hops=%d, %s)", m.Hops, string(m.Content))
+	case ActionCastSearch:
+		me += fmt.Sprintf("(%s, hops=%d, %s)", m.Addr, m.Hops, string(m.Content))
+	case ActionCastReply:
+		me += fmt.Sprintf("(%s)", string(m.Content))
 	}
 	return me
 }
@@ -188,5 +203,28 @@ func NewRandomWalkMessage(addr *Address, loc Location, hops Hops) *Message {
 		Addr:   addr,
 		Loc:    loc,
 		Hops:   hops,
+	}
+}
+
+func NewCastStore(hops Hops, content []byte) *Message {
+	return &Message{
+		Action:  ActionCastStore,
+		Hops:    hops,
+		Content: content,
+	}
+}
+
+func NewCastSearch(addr *Address, hops Hops, content []byte) *Message {
+	return &Message{
+		Action:  ActionCastSearch,
+		Addr:    addr,
+		Hops:    hops,
+		Content: content,
+	}
+}
+func NewCastReply(content []byte) *Message {
+	return &Message{
+		Action:  ActionCastReply,
+		Content: content,
 	}
 }

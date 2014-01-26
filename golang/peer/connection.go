@@ -65,6 +65,15 @@ func (c *Connection) SendMessage(msg *Message) error {
 		buf = append(buf, unparseAddress(msg.Addr)...)
 		buf = append(buf, unparseLocation(msg.Loc)...)
 		buf = append(buf, unparseHops(msg.Hops)...)
+	case ActionCastStore:
+		buf = append(buf, unparseHops(msg.Hops)...)
+		buf = append(buf, unparseContent(msg.Content)...)
+	case ActionCastSearch:
+		buf = append(buf, unparseAddress(msg.Addr)...)
+		buf = append(buf, unparseHops(msg.Hops)...)
+		buf = append(buf, unparseContent(msg.Content)...)
+	case ActionCastReply:
+		buf = append(buf, unparseContent(msg.Content)...)
 	}
 
 	return writeN(c.c, buf)
@@ -191,6 +200,51 @@ func readMessages(c *Connection) {
 				Addr:   addr,
 				Loc:    loc,
 				Hops:   hops,
+			})
+		case ActionCastStore:
+			hops, err := parseHops(br)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "Error on parsing hops of CastStore", err)
+			}
+			content, err := parseContent(br)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "Error on parsing content of CastStore: ", err)
+				return
+			}
+			c.messageCB(c, &Message{
+				Action:  action,
+				Hops:    hops,
+				Content: content,
+			})
+		case ActionCastSearch:
+			addr, err := parseAddress(br)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "Error on parsing Addr of CastSearch", err)
+			}
+			hops, err := parseHops(br)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "Error on parsing hops of CastSearch", err)
+			}
+			content, err := parseContent(br)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "Error on parsing content of CastSearch: ", err)
+				return
+			}
+			c.messageCB(c, &Message{
+				Action:  action,
+				Addr:    addr,
+				Hops:    hops,
+				Content: content,
+			})
+		case ActionCastReply:
+			content, err := parseContent(br)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "Error on parsing content of CastReply: ", err)
+				return
+			}
+			c.messageCB(c, &Message{
+				Action:  action,
+				Content: content,
 			})
 		}
 	}
