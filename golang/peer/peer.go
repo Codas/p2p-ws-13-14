@@ -427,7 +427,7 @@ func (p *Peer) fishLoop() {
 	p.fishticker = time.NewTicker(FISH_INTERVAL)
 	for _ = range p.fishticker.C {
 		var addresses = p.remotePeers(nil)
-		if p.degree != 0 {
+		if p.degree != 0 && len(addresses) > 0 {
 			waterpart := p.water / float32(p.degree+1)
 			wd1part := p.wd1 / float32(p.degree+1)
 			wd2part := p.wd2 / float32(p.degree+1)
