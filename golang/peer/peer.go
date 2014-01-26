@@ -173,6 +173,14 @@ func (p *Peer) GenerateGraph() {
 	p.nodes[0].InitiateGraph()
 }
 
+func (p *Peer) StoreContent(content string) {
+
+}
+
+func (p *Peer) SearchContent(content string) {
+
+}
+
 func (p *Peer) Shutdown() {
 	defer p.l.Close()
 

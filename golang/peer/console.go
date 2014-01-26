@@ -63,6 +63,10 @@ func consoleLoop(p *Peer) {
 			p.GenerateGraph()
 		case "gf":
 			togglePeriodicGraphFile(p, args)
+		case "store":
+			p.StoreContent(args)
+		case "search":
+			p.SearchContent(args)
 		}
 	}
 	if err := scanner.Err(); err != nil {
@@ -85,6 +89,8 @@ func printHelp() {
 	fmt.Println("- b <text> (broadcast <text>)")
 	fmt.Println("- g (generate graph)")
 	fmt.Println("- gf [<intervall>] (periodically generate graph to file (in ms))")
+	fmt.Println("- store <text> (store '<text>'' in the network)")
+	fmt.Println("- search <text> (search '*<text>*' in the network)")
 }
 
 func setVerbosityLevel(p *Peer, text string) {
