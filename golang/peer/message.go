@@ -206,7 +206,7 @@ func NewRandomWalkMessage(addr *Address, loc Location, hops Hops) *Message {
 	}
 }
 
-func NewCastStore(hops Hops, content []byte) *Message {
+func NewCastStoreMessage(hops Hops, content []byte) *Message {
 	return &Message{
 		Action:  ActionCastStore,
 		Hops:    hops,
@@ -214,7 +214,7 @@ func NewCastStore(hops Hops, content []byte) *Message {
 	}
 }
 
-func NewCastSearch(addr *Address, hops Hops, content []byte) *Message {
+func NewCastSearchMessage(addr *Address, hops Hops, content []byte) *Message {
 	return &Message{
 		Action:  ActionCastSearch,
 		Addr:    addr,
@@ -222,7 +222,7 @@ func NewCastSearch(addr *Address, hops Hops, content []byte) *Message {
 		Content: content,
 	}
 }
-func NewCastReply(content []byte) *Message {
+func NewCastReplyMessage(content []byte) *Message {
 	return &Message{
 		Action:  ActionCastReply,
 		Content: content,
