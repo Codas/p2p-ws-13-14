@@ -293,7 +293,7 @@ func (p *Peer) messageCB(n *Node, nremote *remoteNode, m *Message) {
 	case ActionCastStore:
 		// store content here
 		p.newContent(m.Content)
-		p.println(1, fmt.Sprintf("[Global] Storing Content: %s", string(m.Content)))
+		p.println(1, fmt.Sprintf("[Global] Content store: %s", string(m.Content)))
 
 		if m.Hops < 2 {
 			return
@@ -352,9 +352,11 @@ func (p *Peer) messageCB(n *Node, nremote *remoteNode, m *Message) {
 					fmt.Fprintf(os.Stderr, "[Global] !! Dial Error for ActionCastReply: %s\n", err)
 				}
 			}
+			p.println(1, fmt.Sprintf("[Global] Content Lookup (%s) - reply! (%s)", string(m.Content), string(reply[:len(reply)-2])))
+		} else {
+			p.println(1, fmt.Sprintf("[Global] Content Lookup (%s) - nothing found!", string(m.Content)))
 		}
 		p.m.RUnlock()
-		p.println(1, fmt.Sprintf("[Global] Looking up content: %s", string(m.Content)))
 
 		if m.Hops < 2 {
 			return
