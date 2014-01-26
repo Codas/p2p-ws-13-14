@@ -278,9 +278,7 @@ func (p *Peer) messageCB(n *Node, nremote *remoteNode, m *Message) {
 		}
 	case ActionCastStore:
 		// store content here
-		p.m.Lock()
-		p.content = append(p.content, m.Content)
-		p.m.Unlock()
+		p.newContent(m.Content)
 		p.println(1, fmt.Sprintf("[Global] Storing Content: %s", string(m.Content)))
 
 		if m.Hops < 2 {
@@ -378,6 +376,17 @@ func (p *Peer) messageCB(n *Node, nremote *remoteNode, m *Message) {
 	case ActionCastReply:
 		p.searchCB(string(m.Content))
 	}
+}
+
+func (p *Peer) newContent(content []byte) {
+	p.m.Lock()
+	defer p.m.Unlock()
+	for _, c := range p.content {
+		if bytes.Equal(c, content) {
+			return
+		}
+	}
+	p.content = append(p.content, m.Content)
 }
 
 func (p *Peer) sendToAddress(address Address, m *Message) bool {
