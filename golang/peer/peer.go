@@ -186,6 +186,7 @@ func (p *Peer) Shutdown() {
 
 	p.m.Lock()
 	if len(p.nodes) == 0 {
+		p.m.Unlock()
 		return
 	}
 	p.shutdown = true
@@ -246,11 +247,13 @@ func (p *Peer) messageCB(n *Node, nremote *remoteNode, m *Message) {
 
 		// looking for a node that is free
 		var freenodes []*Node
+		p.m.RLock()
 		for _, n := range p.nodes {
 			if n.State.Ready() {
 				freenodes = append(freenodes, n)
 			}
 		}
+		p.m.RUnlock()
 
 		if len(freenodes) == 0 {
 			p.println(fmt.Sprintf("[Global] No Free Node: %s", m))
@@ -259,16 +262,11 @@ func (p *Peer) messageCB(n *Node, nremote *remoteNode, m *Message) {
 
 		node := freenodes[r.Intn(len(freenodes))]
 		if r.Intn(2) == 0 {
-			if node == n {
-				node.sendPrev(m)
-			} else {
-				node.SendPrev(m)
-			}
+			go node.SendPrev(m)
 		} else {
-			if node == n {
-				node.sendNext(m)
-			} else {
-				node.SendNext(m)
+			go node.SendNext(m)
+		}
+		} else {
 			}
 		}
 	}
@@ -320,7 +318,6 @@ func (p *Peer) fishLoop() {
 	// TODO: perhaps adjust timer -> race to equilibrium?
 	p.fishticker = time.NewTicker(FISH_INTERVAL)
 	for _ = range p.fishticker.C {
-		p.m.RLock()
 		var addresses = p.remotePeers(nil)
 		if p.degree != 0 {
 			waterpart := p.water / float32(p.degree+1)
@@ -338,7 +335,6 @@ func (p *Peer) fishLoop() {
 			address := addresses[r.Intn(len(addresses))]
 			p.sendToAddress(*address, NewFishMessage(waterpart, wd1part, wd2part, fishpart, p.strength))
 		}
-		p.m.RUnlock()
 	}
 }
 
@@ -402,7 +398,6 @@ func (p *Peer) handleIncomingConnection(c *Connection, msg *Message) {
 
 		if len(freenodes) == 0 {
 			p.println(fmt.Sprintf("[Global] from %v, No Free Node: Closing Conn: %s", c.Remote(), msg))
-			c.Close()
 			return
 		}
 
