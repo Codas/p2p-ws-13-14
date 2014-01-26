@@ -74,11 +74,13 @@ func (rn *remoteNode) isConn(c *Connection) bool {
 }
 
 type NodeAttr struct {
-	Addr *Address
-	Loc  Location
+	Addr     *Address
+	Loc      Location
+	NContent uint8
 }
 
 type Node struct {
+	p             *Peer
 	State         NodeState
 	ShutdownState int
 	InitState     int
@@ -98,8 +100,9 @@ type Node struct {
 	verbose bool
 }
 
-func NewNode(lAddr *Address, rAddr *Address, loc Location, verbose bool, clean CleanCallbackFunc, message NodeMessageCallbackFunc, degreeCB DegreeCallbackFunc) *Node {
+func NewNode(p *Peer, lAddr *Address, rAddr *Address, loc Location, verbose bool, clean CleanCallbackFunc, message NodeMessageCallbackFunc, degreeCB DegreeCallbackFunc) *Node {
 	n := &Node{
+		p:     p,
 		State: StateDone,
 		Addr:  lAddr,
 		Loc:   loc,
@@ -115,8 +118,9 @@ func NewNode(lAddr *Address, rAddr *Address, loc Location, verbose bool, clean C
 	return n.initiateSplitEdge(rAddr)
 }
 
-func NewCycleNode(lAddr *Address, loc Location, verbose bool, clean CleanCallbackFunc, message NodeMessageCallbackFunc, degreeCB DegreeCallbackFunc) *Node {
+func NewCycleNode(p *Peer, lAddr *Address, loc Location, verbose bool, clean CleanCallbackFunc, message NodeMessageCallbackFunc, degreeCB DegreeCallbackFunc) *Node {
 	n := &Node{
+		p:         p,
 		State:     StateSplitting,
 		InitState: 1,
 
@@ -184,6 +188,7 @@ func (n *Node) InitiateGraph() {
 	n.println(fmt.Sprintf("[Node#%d] Initiating Graph", n.Loc))
 	content := unparseAddress(n.Addr)
 	content = append(content, unparseLocation(n.Loc)...)
+	content = append(content, unparseLocation(Location(len(n.p.content)))...)
 	n.sendNext(NewGraphMessage(n.Addr, n.Loc, content))
 }
 
@@ -511,6 +516,7 @@ func (n *Node) MessageCallback(c *Connection, m *Message) {
 			content := m.Content
 			content = append(content, unparseAddress(n.Addr)...)
 			content = append(content, unparseLocation(n.Loc)...)
+			content = append(content, unparseLocation(Location(len(n.p.content)))...)
 			gm := NewGraphMessage(m.Addr, m.Loc, content)
 			if n.NextNode.isConn(c) {
 				n.sendPrev(gm)

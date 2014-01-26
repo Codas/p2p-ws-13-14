@@ -229,13 +229,13 @@ func writeDOTGraphs(g []*NodeAttr) {
 	fM.WriteString("digraph p2p {\n")
 	for _, n := range g {
 		fG.WriteString(fmt.Sprintf("N%d_%d", n.Addr.Port, n.Loc))
-		fM.WriteString(fmt.Sprintf("N%d", n.Addr.Port))
+		fM.WriteString(fmt.Sprintf("N%d_%d", n.Addr.Port, n.NContent))
 
 		fG.WriteString(" -> ")
 		fM.WriteString(" -> ")
 	}
 	fG.WriteString(fmt.Sprintf("N%d_%d", g[0].Addr.Port, g[0].Loc))
-	fM.WriteString(fmt.Sprintf("N%d", g[0].Addr.Port))
+	fM.WriteString(fmt.Sprintf("N%d_%d", g[0].Addr.Port, g[0].NContent))
 	fG.WriteString(";\n}")
 	fM.WriteString(";\n}")
 }
@@ -249,7 +249,7 @@ func graphCallback(g []*NodeAttr) {
 	}
 	fmt.Println("Graph:")
 	for _, n := range g {
-		fmt.Printf(" -> (%d:%d)", n.Addr.Port, n.Loc)
+		fmt.Printf(" -> (%d:%d#%d)", n.Addr.Port, n.Loc, n.NContent)
 	}
 	fmt.Print("\n")
 }

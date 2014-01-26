@@ -82,9 +82,9 @@ func NewPeer(port, verbosity int, graph GraphCallbackFunc, search SearchCallback
 func (p *Peer) AddNode(addr *Address) {
 	var n *Node
 	if addr == nil {
-		n = NewCycleNode(p.addr, p.uniqueLocation(), p.verbosity >= 3, p.removeNode, p.messageCB, p.degreeCB)
+		n = NewCycleNode(p, p.addr, p.uniqueLocation(), p.verbosity >= 3, p.removeNode, p.messageCB, p.degreeCB)
 	} else {
-		n = NewNode(p.addr, addr, p.uniqueLocation(), p.verbosity >= 3, p.removeNode, p.messageCB, p.degreeCB)
+		n = NewNode(p, p.addr, addr, p.uniqueLocation(), p.verbosity >= 3, p.removeNode, p.messageCB, p.degreeCB)
 	}
 	if n == nil {
 		return
@@ -231,7 +231,11 @@ func (p *Peer) messageCB(n *Node, nremote *remoteNode, m *Message) {
 			if err != nil {
 				break
 			}
-			graph = append(graph, &NodeAttr{addr, loc})
+			ncontent, err := parseLocation(b)
+			if err != nil {
+				break
+			}
+			graph = append(graph, &NodeAttr{addr, loc, uint8(ncontent)})
 		}
 		p.graphCB(graph)
 	case ActionFish:
