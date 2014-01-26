@@ -204,7 +204,7 @@ func (p *Peer) SetVerbosityLevel(level int) {
 	}
 }
 
-func (p *Peer) messageCB(n *Node, m *Message) {
+func (p *Peer) messageCB(n *Node, nremote *remoteNode, m *Message) {
 	switch m.Action {
 	case ActionBroadcast:
 		p.println(fmt.Sprintf("[Global] [BROADCAST] %s", string(m.Content)))
@@ -386,7 +386,7 @@ func (p *Peer) handleIncomingConnection(c *Connection, msg *Message) {
 		if hops > 1 {
 			rwm := NewRandomWalkMessage(msg.Addr, msg.Loc, hops)
 			// handle as if it came from some random node
-			p.messageCB(nil, rwm)
+			p.messageCB(nil, nil, rwm)
 			return
 		}
 

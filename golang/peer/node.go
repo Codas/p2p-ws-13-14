@@ -11,7 +11,7 @@ const RETRY_DELAY = 2 * time.Second
 const RETRY_VARIANCE = 200 * time.Millisecond
 
 type CleanCallbackFunc func(*Node)
-type NodeMessageCallbackFunc func(*Node, *Message)
+type NodeMessageCallbackFunc func(*Node, *remoteNode, *Message)
 type DegreeCallbackFunc func()
 
 const (
@@ -502,11 +502,11 @@ func (n *Node) MessageCallback(c *Connection, m *Message) {
 		} else if n.PrevNode.isConn(c) {
 			n.sendNext(m)
 		}
-		n.messageCB(n, m)
+		n.messageCB(n, n.remoteNode(c), m)
 	case ActionGraph:
 		if *m.Addr == *n.Addr && m.Loc == n.Loc {
 			// we sent this graph request, it's complete
-			n.messageCB(n, m)
+			n.messageCB(n, n.remoteNode(c), m)
 		} else {
 			content := m.Content
 			content = append(content, unparseAddress(n.Addr)...)
@@ -519,11 +519,24 @@ func (n *Node) MessageCallback(c *Connection, m *Message) {
 			}
 		}
 	case ActionFish, ActionRandomWalk:
-		n.messageCB(n, m)
+		n.messageCB(n, n.remoteNode(c), m)
 	default:
 		//fmt.Printf("[Node#%d] ------ could not handle (%s)\n", n.Loc, m)
 		n.printBacklog()
 	}
+}
+
+func (n *Node) remoteNode(c *Connection) *remoteNode {
+	if n.PrevNode.isConn(c) {
+		return n.PrevNode
+	}
+	if n.NextNode.isConn(c) {
+		return n.NextNode
+	}
+	if n.OtherNode.isConn(c) {
+		return n.OtherNode
+	}
+	return nil
 }
 
 func (n *Node) identifyConnection(c *Connection) string {
