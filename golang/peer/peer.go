@@ -271,7 +271,23 @@ func (p *Peer) messageCB(n *Node, nremote *remoteNode, m *Message) {
 				node.SendNext(m)
 			}
 		}
+	}
+}
 
+func (p *Peer) sendToAddress(address Address, m *Message) {
+	p.m.RLock()
+	defer p.m.RUnlock()
+	for _, n := range p.nodes {
+		if !n.State.Ready() {
+			continue
+		}
+		if *n.PrevNode.addr == address {
+			go n.SendPrev(m)
+			break
+		} else if *n.NextNode.addr == address {
+			go n.SendNext(m)
+			break
+		}
 	}
 }
 
@@ -324,17 +340,7 @@ func (p *Peer) fishLoop() {
 			// also to a different nodes of this very peer?)
 			// atm send only to different peers
 			address := addresses[r.Intn(len(addresses))]
-			for _, n := range p.nodes {
-				if n.State.Ready() {
-					if n.PrevNode.addr == address {
-						n.sendPrev(NewFishMessage(waterpart, wd1part, wd2part, fishpart, p.strength))
-						break
-					} else if n.NextNode.addr == address {
-						n.sendNext(NewFishMessage(waterpart, wd1part, wd2part, fishpart, p.strength))
-						break
-					}
-				}
-			}
+			p.sendToAddress(*address, NewFishMessage(waterpart, wd1part, wd2part, fishpart, p.strength))
 		}
 		p.m.RUnlock()
 	}
