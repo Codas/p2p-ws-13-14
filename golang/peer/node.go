@@ -7,8 +7,8 @@ import (
 	"time"
 )
 
-const RETRY_DELAY = 2 * time.Second
-const RETRY_VARIANCE = 200 * time.Millisecond
+const RETRY_DELAY = 1 * time.Second
+const RETRY_VARIANCE = 250 * time.Millisecond
 
 type CleanCallbackFunc func(*Node)
 type NodeMessageCallbackFunc func(*Node, *remoteNode, *Message)
