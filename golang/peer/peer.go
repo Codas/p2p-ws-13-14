@@ -227,10 +227,12 @@ func (p *Peer) messageCB(n *Node, m *Message) {
 		} else {
 			// discard arriving fish
 		}
+		d1 := p.wd1 / p.fish
+		d2 := p.wd2 / p.fish
 		// apply HYSTERESIS to new estimated networksize
 		p.networksize = p.networksize*(1-HYSTERESIS) + p.water/p.fish*HYSTERESIS
-		p.t = p.t*(1-HYSTERESIS) + float32(math.Pow(float64(p.d1()), 2)) / (p.d2() - 2 * p.d1())*HYSTERESIS
-		p.println(fmt.Sprintf("[Global] [FISH] new n=%.2f, t=%.2f [w=%.3f/d1=%.3f/d2=%.3f/f=%.3f]", p.networksize, p.t, p.water, p.d1(), p.d2(), p.fish))
+		p.t = p.t*(1-HYSTERESIS) + (d1*d1)/(d2-2*d1)*HYSTERESIS
+		p.println(fmt.Sprintf("[Global] [FISH] new n=%.2f, t=%.2f [w=%.3f/d1=%.3f/d2=%.3f/f=%.3f]", p.networksize, p.t, p.water, d1, d2, p.fish))
 	case ActionRandomWalk:
 		m.Hops -= 1
 
@@ -270,9 +272,9 @@ func (p *Peer) degreeCB() {
 	p.caclcDegree()
 	var dDiff = p.degree - oldDegree
 	if dDiff > 0 {
-	  p.println(fmt.Sprintf("[Global] [Degree] Degree changed by +%d", dDiff))
+		p.println(fmt.Sprintf("[Global] [Degree] Degree changed by +%d", dDiff))
 		p.wd1 += float32(dDiff)
-		p.wd2 += float32(math.Pow(float64(p.degree), 2) - math.Pow(float64(oldDegree), 2))
+		p.wd2 += float32(p.degree*p.degree - oldDegree*oldDegree)
 	}
 }
 
@@ -301,14 +303,14 @@ func (p *Peer) fishLoop() {
 		p.m.RLock()
 		var addresses = p.remotePeers()
 		if p.degree != 0 {
-			waterpart	:= p.water / float32(p.degree+1)
-			wd1part		:= p.wd1   / float32(p.degree+1)
-			wd2part		:= p.wd2   / float32(p.degree+1)
-			fishpart	:= p.fish  / float32(p.degree+1)
-			p.water	-= waterpart
-			p.wd1		-= wd1part
-			p.wd2		-= wd2part
-			p.fish	-= fishpart
+			waterpart := p.water / float32(p.degree+1)
+			wd1part := p.wd1 / float32(p.degree+1)
+			wd2part := p.wd2 / float32(p.degree+1)
+			fishpart := p.fish / float32(p.degree+1)
+			p.water -= waterpart
+			p.wd1 -= wd1part
+			p.wd2 -= wd2part
+			p.fish -= fishpart
 
 			// TODO: to whom do we want to send it? (only real neighbours? or possibly
 			// also to a different nodes of this very peer?)
@@ -410,15 +412,6 @@ func (p *Peer) handleIncomingConnection(c *Connection, msg *Message) {
 	p.println(fmt.Sprintf("[Global] from %v -> Loc#%d: %s", c.Remote(), n.Loc, msg))
 
 	n.MessageCallback(c, msg)
-}
-
-
-func (p *Peer) d1() float32 {
-	return p.wd1 / p.fish
-}
-
-func (p *Peer) d2() float32 {
-	return p.wd2 / p.fish
 }
 
 func (p *Peer) uniqueLocation() Location {
