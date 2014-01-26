@@ -38,6 +38,7 @@ type Peer struct {
 	wd1, wd2    float32
 	strength    uint32
 	degree      int
+	certainty   int
 
 	shutdown bool
 	done     chan bool
@@ -63,6 +64,7 @@ func NewPeer(port, verbosity int, graph GraphCallbackFunc, search SearchCallback
 		wd2:         0,
 		fish:        1,
 		strength:    r.Uint32(),
+		certainty:   1,
 
 		done:     make(chan bool),
 		graphCB:  graph,
@@ -178,15 +180,23 @@ func (p *Peer) GenerateGraph() {
 	p.nodes[0].InitiateGraph()
 }
 
+func (p *Peer) SetCertainty(certainty int) {
+	p.certainty = certainty
+}
+
 func (p *Peer) StoreContent(content string) {
 	// TODO: use better calculation
-	hops := Hops(12)
+	//hops := Hops(12)
+	//hops := Hops(float64(p.certainty) * math.Sqrt(float64(p.networksize)))
+	hops := Hops(float64(p.certainty) * math.Sqrt(float64(p.t)))
 	p.messageCB(nil, nil, NewCastStoreMessage(hops, []byte(content)))
 }
 
 func (p *Peer) SearchContent(content string) {
 	// TODO: use better calculation
-	hops := Hops(12)
+	//hops := Hops(12)
+	//hops := Hops(float64(p.certainty) * math.Sqrt(float64(p.networksize)))
+	hops := Hops(float64(p.certainty) * math.Sqrt(float64(p.t)))
 	p.messageCB(nil, nil, NewCastSearchMessage(p.addr, hops, []byte(content)))
 }
 

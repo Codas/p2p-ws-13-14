@@ -63,6 +63,8 @@ func consoleLoop(p *Peer) {
 			p.GenerateGraph()
 		case "gf":
 			togglePeriodicGraphFile(p, args)
+		case "setc":
+			setCertainty(p, args)
 		case "store":
 			p.StoreContent(args)
 		case "search":
@@ -89,6 +91,7 @@ func printHelp() {
 	fmt.Println("- b <text> (broadcast <text>)")
 	fmt.Println("- g (generate graph)")
 	fmt.Println("- gf [<intervall>] (periodically generate graph to file (in ms))")
+	fmt.Println("- setc <value> (set certainty constant to  <value>)")
 	fmt.Println("- store <text> (store '<text>' in the network)")
 	fmt.Println("- search <text> (search '*<text>*' in the network)")
 }
@@ -144,6 +147,15 @@ func disconnectNode(p *Peer, text string) {
 		fmt.Fprintf(os.Stderr, "Invalid <#location>!\n")
 		return
 	}
+}
+
+func setCertainty(p *Peer, text string) {
+	var certainty int
+	if _, err := fmt.Sscan(text, &certainty); err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing <value>: (%s)!\n", err)
+		return
+	}
+	p.SetCertainty(certainty)
 }
 
 // graph ticker
