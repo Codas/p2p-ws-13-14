@@ -199,6 +199,7 @@ func (p *Peer) Shutdown() {
 		return
 	}
 	p.shutdown = true
+	p.fishticker.Stop()
 	p.m.Unlock()
 	p.DisconnectAllNodes()
 	<-p.done
@@ -437,9 +438,7 @@ func (p *Peer) fishLoop() {
 			p.wd2 -= wd2part
 			p.fish -= fishpart
 
-			// TODO: to whom do we want to send it? (only real neighbours? or possibly
-			// also to a different nodes of this very peer?)
-			// atm send only to different peers
+			// send to random neighbour
 			address := addresses[r.Intn(len(addresses))]
 			p.sendToAddress(*address, NewFishMessage(waterpart, wd1part, wd2part, fishpart, p.strength))
 		}

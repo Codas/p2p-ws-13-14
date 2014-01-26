@@ -200,7 +200,7 @@ func (n *Node) InitiateMergeEdge() {
 	n.m.Lock()
 	defer n.m.Unlock()
 	if n.State == StateDone {
-		// TODO: perhaps cleanup and return?
+		n.cleanCB(n)
 		return
 	} else if n.State != StateFree {
 		n.println(fmt.Sprintf("[Node#%d] Retrying MergeEdge later (state is %s)", n.Loc, n.State))
