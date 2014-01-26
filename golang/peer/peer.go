@@ -144,6 +144,20 @@ func (p *Peer) CheckNodes() {
 	}
 }
 
+func (p *Peer) ListContent() {
+	p.m.RLock()
+	defer p.m.RUnlock()
+
+	if len(p.nodes) == 0 {
+		fmt.Println("[Global] No content here")
+		return
+	}
+
+	for _, n := range p.content {
+		fmt.Printf(" - %s\n", string(n))
+	}
+}
+
 func (p *Peer) ListNodes() {
 	p.m.RLock()
 	defer p.m.RUnlock()
