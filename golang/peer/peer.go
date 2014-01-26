@@ -447,7 +447,7 @@ func (p *Peer) fishLoop() {
 }
 
 func (p *Peer) addUniqueAddress(addresses []*Address, address, filter *Address) []*Address {
-	if *address == *p.addr || *address == *filter {
+	if *address == *p.addr || (filter != nil && *address == *filter) {
 		return addresses
 	}
 	for _, a := range addresses {
